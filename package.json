@@ -1,0 +1,31 @@
+{
+  "name": "pr-fixer",
+  "version": "0.1.0",
+  "description": "Junior Developer in a box - Autonomous PR fixer",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "pr-fixer": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+  },
+  "keywords": ["pr", "fixer", "ai", "autonomous"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "execa": "^9.5.2",
+    "simple-git": "^3.27.0",
+    "dockerode": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.31",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
