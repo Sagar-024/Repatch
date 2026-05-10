@@ -2,6 +2,8 @@
 
 import { listFiles, readFile, grepSearch, FileResult, GrepResult } from "./filesystem.js";
 import { runInContainer, CommandResult } from "../sandbox/docker.js";
+import * as fs from "fs";
+import * as path from "path";
 
 export interface Tool {
   name: string;
@@ -9,6 +11,16 @@ export interface Tool {
   parameters: Record<string, unknown>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler: (args: any) => Promise<any>;
+}
+
+async function writeFile(args: { filePath: string; content: string }): Promise<{ success: boolean; path: string }> {
+  const { filePath, content } = args;
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, content, "utf-8");
+  return { success: true, path: filePath };
 }
 
 export const tools: Tool[] = [
@@ -65,6 +77,20 @@ export const tools: Tool[] = [
     },
     handler: async (args: { imageTag: string; cmd: string }): Promise<CommandResult> =>
       runInContainer(args.imageTag, args.cmd)
+  },
+  {
+    name: "write_file",
+    description: "Write content to a file (creates or overwrites)",
+    parameters: {
+      type: "object",
+      properties: {
+        filePath: { type: "string" },
+        content: { type: "string" }
+      },
+      required: ["filePath", "content"]
+    },
+    handler: async (args: { filePath: string; content: string }): Promise<{ success: boolean; path: string }> =>
+      writeFile(args)
   }
 ];
 

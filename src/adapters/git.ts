@@ -62,6 +62,49 @@ export async function isGitRepo(dirPath: string): Promise<boolean> {
 }
 
 /**
+ * Create a new branch and switch to it
+ */
+export async function createBranch(repoPath: string, branchName: string): Promise<void> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    await git.checkoutLocalBranch(branchName);
+  } catch (error: unknown) {
+    throw new Error(`Failed to create branch ${branchName}: ${error}`);
+  }
+}
+
+/**
+ * Stage and commit all changes
+ */
+export async function commitChanges(repoPath: string, message: string): Promise<void> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    await git.add(".");
+    await git.commit(message);
+  } catch (error: unknown) {
+    throw new Error(`Failed to commit changes: ${error}`);
+  }
+}
+
+/**
+ * Push the current branch to remote
+ */
+export async function pushBranch(repoPath: string, branchName: string): Promise<void> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    // Check if remote exists
+    const remotes = await git.getRemotes();
+    if (remotes.length === 0) {
+      throw new Error("No remote found to push to.");
+    }
+
+    await git.push("origin", branchName, ["--set-upstream"]);
+  } catch (error: unknown) {
+    throw new Error(`Failed to push branch ${branchName}: ${error}`);
+  }
+}
+
+/**
  * Get the default branch name (main or master)
  */
 export async function getDefaultBranch(repoPath: string): Promise<string> {

@@ -1,6 +1,6 @@
 // LiteLLM wrapper - Model agnostic inference
 
-interface LLMMessage {
+export interface LLMMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
@@ -40,20 +40,15 @@ export interface ToolDefinition {
 }
 
 /**
- * Default to Anthropic or OpenAI based on environment
+ * Create provider based on model prefix
+ * Supports: openai/*, claude/*
  */
 export function createProvider(config: ProviderConfig): LLMProvider {
-  const providerType = config.model.startsWith("claude")
-    ? "anthropic"
-    : config.model.startsWith("ollama")
-    ? "ollama"
-    : "openai";
+  const providerType = config.model.startsWith("claude") ? "anthropic" : "openai";
 
   switch (providerType) {
     case "anthropic":
       return new AnthropicProvider(config);
-    case "ollama":
-      return new OllamaProvider(config);
     default:
       return new OpenAIProvider(config);
   }
@@ -118,8 +113,10 @@ class OpenAIProvider implements LLMProvider {
   }
 
   async complete(messages: LLMMessage[], tools?: ToolDefinition[]): Promise<LLMResponse> {
+    // Read API key from OPENAI_API_KEY
     const apiKey = this.config.apiKey || process.env.OPENAI_API_KEY;
-    const baseUrl = this.config.baseUrl || "https://api.openai.com/v1";
+    // Read base URL from OPENAI_API_BASE, defaulting to OpenCode Zen
+    const baseUrl = this.config.baseUrl || process.env.OPENAI_API_BASE || "https://opencode.ai/zen/v1";
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
@@ -144,7 +141,8 @@ class OpenAIProvider implements LLMProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json() as {
@@ -162,147 +160,13 @@ class OpenAIProvider implements LLMProvider {
   }
 }
 
-class OllamaProvider implements LLMProvider {
-  private config: ProviderConfig;
-
-  constructor(config: ProviderConfig) {
-    this.config = config;
-  }
-
-  async complete(messages: LLMMessage[], tools?: ToolDefinition[]): Promise<LLMResponse> {
-    const baseUrl = this.config.baseUrl || "http://localhost:11434";
-
-    // Use v1/chat/completions endpoint for tool support
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: this.config.model.replace("ollama/", ""),
-        messages: messages,
-        tools: tools?.map(t => ({
-          type: "function",
-          function: {
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters
-          }
-        })),
-        stream: false
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.statusText}`);
-    }
-
-    const data = await response.json() as {
-      choices: Array<{
-        message: {
-          content?: string;
-          tool_calls?: Array<{ function: { name: string; arguments: string } }>
-        }
-      }>;
-    };
-
-    const message = data.choices[0]?.message;
-    const content = message?.content || "";
-
-    // Check for structured tool_calls
-    let toolCalls: ToolCall[] | undefined = message?.tool_calls?.map(tc => ({
-      name: tc.function.name,
-      arguments: JSON.parse(tc.function.arguments)
-    }));
-
-    // If no structured tool_calls, try to parse tool-like JSON from content
-    if (!toolCalls || toolCalls.length === 0) {
-      const parsed = parseToolCallFromContent(content);
-      if (parsed) {
-        toolCalls = [parsed];
-      }
-    }
-
-    return { content, toolCalls: toolCalls?.length ? toolCalls : undefined };
-  }
-}
-
-/**
- * Parse tool call from content when not in structured format
- * Handles responses like: {"name": "list_files", "arguments": {"dirPath": "/tmp"}}
- * or: {'name': 'list_files', 'arguments': {'dirPath': '/tmp'}}
- * or: 1. {"name": "list_files", ...}
- * or: ```json {"name": ...} ```
- */
-function parseToolCallFromContent(content: string): ToolCall | null {
-  // Remove markdown code blocks
-  let cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "");
-  // Remove numbering like "1. " or "2. " at start of lines
-  cleaned = cleaned.replace(/^\d+\.\s*/gm, "");
-
-  try {
-    // Try to parse the entire content as JSON first
-    const parsed = JSON.parse(cleaned);
-    if (parsed.name && parsed.arguments && typeof parsed.name === "string") {
-      return {
-        name: parsed.name,
-        arguments: parsed.arguments
-      };
-    }
-  } catch {
-    // Not a JSON object at top level
-  }
-
-  // Try to find complete JSON objects by splitting on "}\n{" or "}{"
-  // Handle both: {"name": ...}\n{"name": ...} and {"name": ...}{"name": ...}
-  const jsonObjects = cleaned.split(/(?<=})\s*(?=\{)/);
-
-  for (const obj of jsonObjects) {
-    const trimmed = obj.trim();
-    if (!trimmed) continue;
-
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed.name && parsed.arguments) {
-        return {
-          name: parsed.name,
-          arguments: parsed.arguments
-        };
-      }
-    } catch {
-      // Not valid JSON, try next
-    }
-  }
-
-  // Fallback: try to find any JSON-like object with name and arguments
-  const jsonLikePattern = /\{[^{}]*"name"[^{}]*"arguments"[^{}]*\}/g;
-  const matches = cleaned.match(jsonLikePattern);
-
-  if (matches) {
-    for (const match of matches) {
-      try {
-        const parsed = JSON.parse(match.replace(/'/g, '"'));
-        if (parsed.name && parsed.arguments) {
-          return {
-            name: parsed.name,
-            arguments: parsed.arguments
-          };
-        }
-      } catch {
-        // Try next
-      }
-    }
-  }
-
-  return null;
-}
 
 /**
  * Get the configured model from environment
+ * Default: minimax-m2.5-free
  */
 export function getDefaultModel(): string {
-  // Default to Ollama with qwen2.5-coder:7b
-  return process.env.AI_MODEL || "ollama/qwen2.5-coder:7b";
+  return process.env.AI_MODEL || "minimax-m2.5-free";
 }
 
 /**
@@ -356,6 +220,18 @@ export function getToolsForLLM(): ToolDefinition[] {
           cmd: { type: "string", description: "The command to run inside the container" }
         },
         required: ["imageTag", "cmd"]
+      }
+    },
+    {
+      name: "write_file",
+      description: "Write content to a file. Creates the file or overwrites if exists. Returns success status.",
+      parameters: {
+        type: "object",
+        properties: {
+          filePath: { type: "string", description: "The full path to the file to write" },
+          content: { type: "string", description: "The content to write to the file" }
+        },
+        required: ["filePath", "content"]
       }
     }
   ];

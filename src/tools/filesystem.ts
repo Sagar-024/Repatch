@@ -70,7 +70,7 @@ export function readFile(filePath: string): FileResult {
  */
 export function grepSearch(pattern: string, dirPath: string, extensions?: string[]): GrepResult[] {
   const results: GrepResult[] = [];
-  const regex = new RegExp(pattern, "gi");
+  const regex = new RegExp(pattern, "i"); // Remove 'g' flag for simple line-by-line matching
 
   const files = listFiles(dirPath);
 
@@ -96,9 +96,6 @@ export function grepSearch(pattern: string, dirPath: string, extensions?: string
           });
         }
       }
-
-      // Reset regex lastIndex
-      regex.lastIndex = 0;
     } catch {
       // Skip files that can't be read
     }
