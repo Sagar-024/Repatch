@@ -1,6 +1,6 @@
 // Tool registration and schema exports
 
-import { listFiles, readFile, grepSearch, FileResult, GrepResult } from "./filesystem.js";
+import { listFiles, readFile, grepSearch, FileResult, GrepResult, editFile } from "./filesystem.js";
 import { runInContainer, CommandResult } from "../sandbox/docker.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -91,6 +91,21 @@ export const tools: Tool[] = [
     },
     handler: async (args: { filePath: string; content: string }): Promise<{ success: boolean; path: string }> =>
       writeFile(args)
+  },
+  {
+    name: "edit_file",
+    description: "Surgically replace a snippet of code in a file. Requires an exact match of the old snippet.",
+    parameters: {
+      type: "object",
+      properties: {
+        filePath: { type: "string" },
+        oldSnippet: { type: "string", description: "The exact code snippet to be replaced" },
+        newSnippet: { type: "string", description: "The new code snippet to insert" }
+      },
+      required: ["filePath", "oldSnippet", "newSnippet"]
+    },
+    handler: async (args: { filePath: string; oldSnippet: string; newSnippet: string }) =>
+      editFile(args.filePath, args.oldSnippet, args.newSnippet)
   }
 ];
 

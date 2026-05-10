@@ -4,9 +4,9 @@
 import { AgentState, Step, HistoryEntry, createInitialState } from "./state.js";
 import { createProvider, getDefaultModel, getToolsForLLM, ToolCall, LLMMessage } from "../inference/provider.js";
 import { getTool } from "../tools/registry.js";
-import { createBranch, commitChanges, pushBranch, getDefaultBranch, setRemoteUrl } from "../adapters/git.js";
+import { createBranch, commitChanges, pushBranch, getDefaultBranch, setRemoteUrl, getModifiedFiles } from "../adapters/git.js";
 import { createPullRequest, hasGitHubToken, forkRepository, getAuthenticatedUser } from "../adapters/github.ts";
-import { detectLintCommand } from "../sandbox/lint.js";
+import { detectLintCommand, detectFormatCommand } from "../sandbox/lint.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -321,8 +321,8 @@ Respond with a JSON plan:
   private async handleExecute(state: AgentState): Promise<AgentState> {
     const provider = createProvider({ model: this.model, temperature: 0 });
     const toolContext = { repoPath: state.repoPath };
-    // Force write_file as the only tool to ensure it's used
-    const tools = getToolsForLLM().filter(t => t.name === "write_file");
+    // Prioritize edit_file for surgical changes
+    const tools = getToolsForLLM().filter(t => ["edit_file", "write_file", "run_command"].includes(t.name));
 
     // Get plan from history
     const planEntry = state.history.find(h => h.step === "PLAN");
@@ -340,9 +340,9 @@ Respond with a JSON plan:
     const systemPrompt = `You are the EXECUTE module of an autonomous bug-fixing agent. Your MISSION is to apply the specific code changes defined in the provided PLAN. 
 
 ### CRITICAL RULES:
-1. NO EXPLORATION: You have the FULL CONTENT of the relevant files below. Do NOT attempt to read them again.
-2. TOOL MANDATE: You MUST use the 'write_file' tool to apply the fix. 
-3. FULL CONTENT: When calling 'write_file', you MUST provide the ENTIRE content of the file with the fix applied. No partial snippets.
+1. SURGICAL EDITS: Use the 'edit_file' tool to apply changes. Do NOT rewrite the whole file unless creating a new one.
+2. EXACT MATCH: 'edit_file' requires an EXACT match of the 'oldSnippet'. Include correct indentation and line endings.
+3. NO EXPLORATION: You have the FULL CONTENT of the relevant files below. Do NOT attempt to read them again.
 4. NO CHAT: Do not explain your actions. Do not apologize. Do not ask for confirmation.
 5. IMMEDIATE ACTION: Your first and only response must be the tool call(s) required to fulfill the PLAN.
 
@@ -351,11 +351,11 @@ ISSUE: ${state.issueText}
 PLAN: ${planEntry?.result || "No explicit plan"}${fileContext}
 
 ### EXECUTION:
-Apply the fix to the relevant file(s) NOW using 'write_file'.`;
+Apply the fix to the relevant file(s) NOW using 'edit_file'.`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: "Apply the fix described in the PLAN immediately using write_file." }
+      { role: "user" as const, content: "Apply the fix described in the PLAN immediately using edit_file." }
     ];
 
     let response = await provider.complete(messages, tools);
@@ -461,8 +461,19 @@ Use run_command to verify the fix.`;
       iterations++;
     }
 
-    // Automatic Linter/Formatter Verification
+    // Automatic Style Compliance & Linter Verification
     if (testsPassed) {
+      // 1. Auto-Format
+      const formatCmd = detectFormatCommand(state.repoPath);
+      if (formatCmd) {
+        console.log(`   🔧 Running formatter: ${formatCmd}`);
+        await this.executeTool({
+          name: "run_command",
+          arguments: { cmd: formatCmd, imageTag: "pr-fixer-sandbox:latest" }
+        }, toolContext, state);
+      }
+
+      // 2. Lint Check
       const lintCmd = detectLintCommand(state.repoPath);
       if (lintCmd) {
         console.log(`   🔧 Running linter: ${lintCmd}`);
@@ -500,8 +511,16 @@ Use run_command to verify the fix.`;
   private async handleSubmit(state: AgentState): Promise<AgentState> {
     console.log(`   📝 Drafting Engineering Narrative...`);
 
-    // 1. Generate Narrative
-    const narrative = this.generateNarrative(state);
+    // 1. Generate Narrative (Check for Templates)
+    const template = this.findPRTemplate(state.repoPath);
+    let narrative = "";
+    
+    if (template) {
+      console.log(`   📄 PR Template detected. Mapping narrative to template...`);
+      narrative = await this.populateTemplate(state, template);
+    } else {
+      narrative = this.generateNarrative(state);
+    }
     
     // 1% Contributor Conventional Title
     let prTitle = "fix: address logic error in source code";
@@ -543,8 +562,20 @@ Use run_command to verify the fix.`;
       console.log(`   🌿 Branching: ${branchName}`);
       await createBranch(state.repoPath, branchName);
 
-      console.log(`   💾 Committing fix...`);
-      await commitChanges(state.repoPath, prTitle);
+      // Identify modified files for atomic commits
+      const modifiedFiles = await getModifiedFiles(state.repoPath);
+      const testFiles = modifiedFiles.filter(f => 
+        f.includes("test") || f.includes("spec") || f.includes("repro")
+      );
+      const sourceFiles = modifiedFiles.filter(f => !testFiles.includes(f));
+
+      if (testFiles.length > 0) {
+        console.log(`   💾 Committing reproduction tests...`);
+        await commitChanges(state.repoPath, `test: add reproduction case for reported issue`, testFiles);
+      }
+
+      console.log(`   💾 Committing surgical fix...`);
+      await commitChanges(state.repoPath, prTitle, sourceFiles);
 
       if (process.env.GH_TOKEN) {
         let headBranch = branchName;
@@ -597,6 +628,47 @@ Use run_command to verify the fix.`;
 
     state.currentStep = "SUBMIT";
     return state;
+  }
+
+  private findPRTemplate(repoPath: string): string | null {
+    const locations = [
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      "PULL_REQUEST_TEMPLATE.md",
+      "docs/PULL_REQUEST_TEMPLATE.md",
+      ".github/pull_request_template.md",
+    ];
+
+    for (const loc of locations) {
+      const fullPath = path.join(repoPath, loc);
+      if (fs.existsSync(fullPath)) {
+        return fs.readFileSync(fullPath, "utf-8");
+      }
+    }
+    return null;
+  }
+
+  private async populateTemplate(state: AgentState, template: string): Promise<string> {
+    const provider = createProvider({ model: this.model });
+    const baseNarrative = this.generateNarrative(state);
+
+    const systemPrompt = `You are a Senior Contributor mapping a bug fix to a repository's Pull Request template.
+
+PR TEMPLATE:
+${template}
+
+OUR TECHNICAL NARRATIVE:
+${baseNarrative}
+
+### MISSION:
+Rewrite the OUR TECHNICAL NARRATIVE into the PR TEMPLATE format. 
+1. Keep the tone professional and engineering-focused.
+2. Ensure ALL raw verification logs from the narrative are preserved in the appropriate template sections.
+3. Check all relevant checkboxes if they are mentioned in the narrative.
+
+Respond with ONLY the populated template markdown.`;
+
+    const response = await provider.complete([{ role: "system", content: systemPrompt }]);
+    return response.content;
   }
 
   private generateNarrative(state: AgentState): string {
@@ -717,6 +789,9 @@ Fixes: ${state.issueUrl || "the reported issue"}`;
     if (toolCall.name === "write_file" && args.filePath) {
       args.filePath = resolvePath(args.filePath as string);
     }
+    if (toolCall.name === "edit_file" && args.filePath) {
+      args.filePath = resolvePath(args.filePath as string);
+    }
 
     // Special case for write_file
     if (toolCall.name === "write_file") {
@@ -732,6 +807,11 @@ Fixes: ${state.issueUrl || "the reported issue"}`;
         if (!state.visitedFiles.includes(fp)) {
           state.visitedFiles.push(fp);
         }
+      }
+
+      // Track patches for PR narrative
+      if (toolCall.name === "edit_file" || toolCall.name === "write_file") {
+        state.fixPatch = (state.fixPatch || "") + `\n${toolCall.name}: ${JSON.stringify(toolCall.arguments)}`;
       }
       
       return result;

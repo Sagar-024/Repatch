@@ -2,6 +2,38 @@ import * as fs from "fs";
 import * as path from "path";
 
 /**
+ * Detect the auto-formatter command for a given repository
+ */
+export function detectFormatCommand(repoPath: string): string | null {
+  const packageJsonPath = path.join(repoPath, "package.json");
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+      if (pkg.scripts) {
+        if (pkg.scripts.format) return "npm run format";
+        if (pkg.scripts.fix) return "npm run fix";
+      }
+    } catch { /* ignore */ }
+  }
+
+  const formatFiles: Record<string, string> = {
+    ".prettierrc": "npx prettier --write .",
+    "pyproject.toml": "black .",
+    "ruff.toml": "ruff format .",
+    ".rustfmt.toml": "cargo fmt",
+    "go.mod": "go fmt ./...",
+  };
+
+  for (const [file, cmd] of Object.entries(formatFiles)) {
+    if (fs.existsSync(path.join(repoPath, file))) {
+      return cmd;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Detect the linter or formatter command for a given repository
  */
 export function detectLintCommand(repoPath: string): string | null {

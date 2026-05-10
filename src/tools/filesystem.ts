@@ -105,6 +105,33 @@ export function grepSearch(pattern: string, dirPath: string, extensions?: string
 }
 
 /**
+ * Surgical snippet replacement in a file
+ */
+export function editFile(filePath: string, oldSnippet: string, newSnippet: string): { success: boolean; error?: string } {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    
+    // Exact match check
+    const occurrences = content.split(oldSnippet).length - 1;
+    
+    if (occurrences === 0) {
+      return { success: false, error: "Snippet not found in file. Ensure exact match including whitespace." };
+    }
+    
+    if (occurrences > 1) {
+      return { success: false, error: `Ambiguous match: found ${occurrences} occurrences of the snippet.` };
+    }
+    
+    const newContent = content.replace(oldSnippet, newSnippet);
+    fs.writeFileSync(filePath, newContent, "utf-8");
+    
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
  * Check if a file exists
  */
 export function fileExists(filePath: string): boolean {

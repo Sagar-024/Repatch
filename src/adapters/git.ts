@@ -74,15 +74,35 @@ export async function createBranch(repoPath: string, branchName: string): Promis
 }
 
 /**
- * Stage and commit all changes
+ * Stage and commit changes (all or specific files)
  */
-export async function commitChanges(repoPath: string, message: string): Promise<void> {
+export async function commitChanges(repoPath: string, message: string, files: string[] = ["."]): Promise<void> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
-    await git.add(".");
+    for (const file of files) {
+      await git.add(file);
+    }
     await git.commit(message);
   } catch (error: unknown) {
     throw new Error(`Failed to commit changes: ${error}`);
+  }
+}
+
+/**
+ * Get a list of files that have been modified or added
+ */
+export async function getModifiedFiles(repoPath: string): Promise<string[]> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    const status = await git.status();
+    return [
+      ...status.modified,
+      ...status.not_added,
+      ...status.created,
+      ...status.staged
+    ];
+  } catch {
+    return [];
   }
 }
 
