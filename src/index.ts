@@ -354,4 +354,88 @@ async function executeTool(toolCall: ToolCall, context: { repoPath: string }): P
   }
 }
 
+program
+  .command("autofix <repo-url>")
+  .description("Run autonomous PR fixing (Epic 3 & 4: Understand to Submit)")
+  .option("-i, --issue <text>", "Issue description or GitHub issue URL")
+  .option("-m, --model <model>", "AI model to use", getDefaultModel())
+  .option("-t, --target <dir>", "Target directory for cloning", ".pr-fixer-temp")
+  .option("-h, --hint <text>", "Provide a hint to steer the agent")
+  .option("--open-pr", "Create a pull request on GitHub", true)
+  .option("--no-open-pr", "Stop after verification and save results locally")
+  .action(async (repoUrl: string, options: { issue?: string; model: string; target: string; openPr: boolean; hint?: string }) => {
+    console.log(`\n🚀 Repatch: Autonomous PR Fixer\n`);
+    console.log(`   Repo: ${repoUrl}`);
+    console.log(`   Model: ${options.model}`);
+    console.log(`   Issue: ${options.issue || "User provided"}`);
+    console.log(`   Hint: ${options.hint || "None"}`);
+    console.log(`   Open PR: ${options.openPr}\n`);
+
+    // Import orchestrator
+    const { createOrchestrator } = await import("./orchestrator/machine.js");
+    const { createInitialState } = await import("./orchestrator/state.js");
+
+    const targetDir = path.resolve(process.cwd(), options.target);
+    const inputPath = path.resolve(repoUrl);
+    const isLocalPath = fs.existsSync(inputPath);
+
+    // Step 1: Clone repo (or use local path)
+    console.log(`📦 Step 1: ${isLocalPath ? "Using local repository" : "Cloning repository"}...`);
+    try {
+      if (isLocalPath) {
+        console.log(`   📂 Using: ${inputPath}\n`);
+      } else {
+        await cloneRepo(repoUrl, targetDir);
+        console.log(`   ✅ Cloned to: ${targetDir}\n`);
+      }
+    } catch (error) {
+      console.error(`   ❌ Repository access failed: ${error}`);
+      process.exit(1);
+    }
+
+    const workingDir = isLocalPath ? inputPath : targetDir;
+
+    // Step 2: Build sandbox
+    console.log(`🐳 Step 2: Building sandbox...`);
+    let imageTag = "pr-fixer-sandbox:latest";
+    try {
+      const dockerfile = await generateDockerfile(workingDir);
+      const { buildImage } = await import("./sandbox/docker.js");
+      await buildImage(dockerfile, imageTag);
+      console.log(`   ✅ Image built: ${imageTag}\n`);
+    } catch (error) {
+      console.error(`   ❌ Sandbox build failed: ${error}`);
+      process.exit(1);
+    }
+
+    // Step 3: Run the orchestrator
+    const issueText = options.issue || "Fix the bug described in the repository";
+    const initialState = createInitialState(repoUrl, "", issueText, workingDir, options.hint);
+
+    console.log(`🤖 Step 3: Running autonomous fix loop...`);
+    const orchestrator = createOrchestrator(options.model);
+    
+    // We run until VERIFY, then check openPr
+    let state = initialState;
+    while (state.currentStep !== "SUBMIT" && state.currentStep !== "VERIFY") {
+      state = await orchestrator.transition(state);
+    }
+
+    // Always run VERIFY if we are not at SUBMIT yet
+    if (state.currentStep === "VERIFY") {
+      state = await orchestrator.transition(state);
+    }
+
+    // Check if we should submit
+    if (options.openPr && state.currentStep === "SUBMIT") {
+      state = await orchestrator.transition(state);
+    } else {
+      console.log(`\n✅ Verification finished. results saved locally.`);
+    }
+
+    console.log(`\n✨ Done!`);
+    console.log(`   Steps completed: ${state.history.length}`);
+    console.log(`   Current step: ${state.currentStep}`);
+  });
+
 program.parse();

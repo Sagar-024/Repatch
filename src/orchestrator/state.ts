@@ -17,6 +17,10 @@ export interface AgentState {
   repoPath: string;
   visitedFiles: string[];
   reproductionTest?: string;
+  reproductionFailureOutput?: string;
+  verificationSuccessOutput?: string;
+  lintOutput?: string;
+  hint?: string;
   fixPatch?: string;
   errorLogs: string[];
   history: HistoryEntry[];
@@ -33,7 +37,8 @@ export function createInitialState(
   repoUrl: string,
   issueUrl: string,
   issueText: string,
-  repoPath: string
+  repoPath: string,
+  hint?: string
 ): AgentState {
   return {
     currentStep: "UNDERSTAND",
@@ -42,6 +47,7 @@ export function createInitialState(
     issueText,
     repoPath,
     visitedFiles: [],
+    hint,
     errorLogs: [],
     history: []
   };
