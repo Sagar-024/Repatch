@@ -21,6 +21,7 @@ export interface AgentState {
   verificationSuccessOutput?: string;
   lintOutput?: string;
   hint?: string;
+  references?: string[];
   fixPatch?: string;
   errorLogs: string[];
   history: HistoryEntry[];
