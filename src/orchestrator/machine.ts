@@ -263,39 +263,53 @@ Respond with JSON tool calls.`;
   private async handlePlan(state: AgentState): Promise<AgentState> {
     const provider = createProvider({ model: this.model });
 
-    // Gather context from previous steps
-    const exploredFiles = state.visitedFiles.slice(0, 3).map(f => {
+    // RESEARCH GATE: Ensure we have actually READ the relevant files
+    if (state.visitedFiles.length === 0) {
+      console.log("   ⚠️ Research Gate triggered: No files visited. Forcing EXPLORE...");
+      state.currentStep = "EXPLORE";
+      return state;
+    }
+
+    // Gather context from visited files
+    const exploredFiles = state.visitedFiles.slice(0, 5).map(f => {
       const content = this.safeReadFile(f);
-      return `File: ${path.basename(f)}\n${content?.slice(0, 500) || "Could not read"}`;
+      return `File: ${path.basename(f)}\nFull Path: ${f}\nContent:\n${content || "Could not read"}`;
     }).join("\n\n");
 
-    const systemPrompt = `You are planning a fix for a bug.
+    const systemPrompt = `You are a Senior Architect planning a surgical fix.
 
 ISSUE: ${state.issueText}
+HINT: ${state.hint || "None"}
 
-EXPLORED FILES:
+EXPLORED CODEBASE CONTEXT:
 ${exploredFiles}
 
-Based on your analysis, create a fix plan. Identify:
-1. The root cause of the bug
-2. The specific files that need to be modified
-3. The changes needed
-4. How to verify the fix works
+### MISSION:
+1. Identify the EXACT line(s) that need to change.
+2. Ensure your plan is MINIMAL.
+3. If you do not see the source code for the file that needs fixing in the CONTEXT above, you MUST respond with: "I need to read [file path] before I can plan."
 
 Respond with a JSON plan:
-{"rootCause": "...", "filesToModify": [...], "changes": [...], "verification": "..."}`;
+{"rootCause": "...", "filesToModify": [...], "changes": ["line 1 -> new line 1", ...], "verification": "..."}`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: "Create a plan to fix this bug based on your analysis." }
+      { role: "user" as const, content: "Create the fix plan based on the explored code." }
     ];
 
     const response = await provider.complete(messages);
+    
+    // Check if model is asking for more files
+    if (response.content.toLowerCase().includes("need to read")) {
+       console.log("   ⚠️ Model requested more context. Backtracking to EXPLORE...");
+       state.currentStep = "EXPLORE";
+       return state;
+    }
 
     state.history.push({
       step: "PLAN",
       action: "Created fix plan",
-      result: response.content.slice(0, 300),
+      result: response.content.slice(0, 500),
       timestamp: Date.now()
     });
 
