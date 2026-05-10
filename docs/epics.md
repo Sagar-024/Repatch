@@ -125,7 +125,7 @@ Before building Epic 1, perform a 2-hour spike:
 1.  Manually run `nixpacks plan` on 3 varied repos (Python, Node, Go).
 2.  Measure the time and accuracy of detection.
 3.  Verify that `nixpacks build` can run without `sudo` in the target environment.
-4.  Check if `LiteLLM` can successfully call an `Ollama` endpoint with a simple "Hello World" tool-call prompt.
+4.  Check if `LiteLLM` can successfully call an OpenAI-compatible endpoint with a simple "Hello World" tool-call prompt.
 
 ---
 **Next Step:** Perform the "Nix-Check" spike to validate detection accuracy before committing to the `sandbox/` implementation.

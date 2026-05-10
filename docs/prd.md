@@ -31,13 +31,12 @@ The "Holy Grail" of environment setup is zero-config, reproducible, and portable
 *   **Cold Start & Caching:** Dependencies are aggressively cached in Docker volumes (e.g., `~/.npm`, `~/.cargo`) to make subsequent fixes near-instantaneous.
 *   **Failure Recovery:** If an environment fails to build (e.g., missing system library), the agent parses the build error, attempts to inject the missing Nix package, and retries automatically before asking the user.
 
-## 5. The AI Brain: Model Agnosticity & Ollama
-To ensure accessibility for both local-first developers and enterprise teams, the agent is "LLM-Agnostic."
+## 5. The AI Brain: Model Agnosticity & Cloud API
+To support enterprise teams and developers, the agent uses cloud-based LLM APIs.
 
-*   **Universal Bridge (LiteLLM):** Supports 100+ providers (OpenAI, Anthropic, Gemini, Ollama, vLLM) via a standardized interface. Users can switch models via `AI_MODEL` environment variable.
-*   **Local-First Optimization (Ollama):** 
-    *   Optimized for **Qwen2.5-Coder** and **Llama 3.1** for zero-cost, private execution.
-    *   **Context Management:** Automatic pruning and semantic compression of file contents to fit within local model context windows (32k-64k).
+*   **Universal Bridge (LiteLLM):** Supports 100+ providers (OpenAI, Anthropic, Gemini, vLLM) via a standardized OpenAI-compatible interface. Users can switch models via `AI_MODEL` environment variable.
+*   **Cloud API:** Default model is **OpenAI GPT-4o Mini** for cost-effective, high-quality code understanding.
+    *   Uses **OPENAI_API_KEY** and **OPENAI_API_BASE** environment variables for configuration.
     *   **Deterministic Validation:** Every AI-generated tool call is validated against a strict schema (e.g., Zod/Pydantic) to prevent hallucinations from affecting the host system.
 *   **Portable Skills:** Agent logic and coding conventions are stored in plain-text `SKILL.md` files, ensuring consistent behavior across different models.
 
@@ -75,7 +74,6 @@ To act as a universal plug-in for modern engineering workflows, the agent suppor
 ## 10. Data Sovereignty & Privacy
 Building trust requires absolute transparency regarding data handling.
 
-*   **Local-First Execution:** When using the CLI + Ollama, **zero data** leaves the user's machine. The code, the issue text, and the model weights all stay local.
 *   **Zero-Training Guarantee:** For cloud-based models (OpenAI/Anthropic), the agent uses "API-only" modes which contractually prohibit the use of customer data for model training.
 *   **Audit Logs:** Every command run inside the Docker container is logged and auditable, ensuring the agent's actions are transparent and non-destructive.
 

@@ -6,7 +6,7 @@ The system uses a **Modular Orchestration** pattern to separate the "Thinking" f
 *   **Entry Adapters:** CLI and GitHub Webhook handlers that normalize inputs into a `FixRequest`.
 *   **Orchestrator:** A LangGraph-powered state machine that drives the 7-step Inviolable Loop.
 *   **Sandbox Manager:** Uses **Nixpacks** to detect ecosystems and **Docker** to provide isolated execution.
-*   **Context Engine:** Manages LLM memory and prunes codebase context for small-window models (Ollama).
+*   **Context Engine:** Manages LLM memory and context for the model.
 *   **Inference Bridge:** Powered by **LiteLLM** for model-agnosticism and **Zod/Pydantic** for tool-call validation.
 
 ## 2. Core Loop Engine (The 7-Step State Machine)
@@ -25,9 +25,8 @@ The loop is implemented as a directed graph with the following nodes:
 *   **Cache Management:** Persistent volumes map the host's dependency caches (e.g., `~/.npm`) to the container to speed up "Cold Starts."
 
 ## 4. Model Agnosticity & Tool Guarding
-*   **LiteLLM:** Acts as a universal adapter. Switching from `claude-3-5-sonnet` to `ollama/qwen2.5-coder` requires only an environment variable change.
+*   **LiteLLM:** Acts as a universal adapter via OpenAI-compatible API. Switching from `openai/gpt-4o-mini` to `openai/gpt-4o` requires only an environment variable change.
 *   **Schema Guard:** Every tool call from the LLM is validated against a JSON schema before execution. Hallucinated arguments trigger a "Correction Prompt" back to the model.
-*   **Semantic Pruning:** For 32k context models, the system uses function-level chunking and summarizes "Visited Files" to maximize context utility.
 
 ## 5. Tool Library & Safety
 *   **Tool Interface:** Each tool (e.g., `grep_search`, `read_file`) is a standalone class with a strictly defined input schema.
