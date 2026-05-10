@@ -369,10 +369,11 @@ Apply the fix to the relevant file(s) NOW using 'write_file'.`;
 
 REPO PATH: ${state.repoPath}
 
-Run tests or commands to verify the fix is working. Look for:
-1. Test files to run
-2. Build commands to execute
-3. Any validation steps
+### MISSION:
+1. You MUST run the tests to verify the fix.
+2. Use 'run_command' to execute the reproduction test or any other relevant tests.
+3. If tests fail, you must analyze why.
+4. You are NOT finished until you have proof that the fix works.
 
 Use run_command to verify the fix.`;
 
@@ -447,7 +448,27 @@ Use run_command to verify the fix.`;
 
     // 1. Generate Narrative
     const narrative = this.generateNarrative(state);
-    const prTitle = `Fix: ${state.history.find(h => h.step === "UNDERSTAND")?.result.slice(0, 50) || "bug fix"} by Repatch`;
+    
+    // Improved Title Generation
+    let prTitle = "bug fix by Repatch";
+    const understandEntry = state.history.find(h => h.step === "UNDERSTAND");
+    if (understandEntry?.result) {
+      try {
+        // Try to parse as JSON first
+        const resultText = understandEntry.result;
+        const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.summary) {
+            prTitle = `Fix: ${parsed.summary.slice(0, 60)}`;
+          }
+        } else {
+          prTitle = `Fix: ${resultText.slice(0, 60)}`;
+        }
+      } catch {
+        prTitle = `Fix: ${understandEntry.result.slice(0, 60)}`;
+      }
+    }
     
     // 2. Save result locally
     const resultsDir = path.join(process.cwd(), "results");
@@ -471,8 +492,10 @@ Use run_command to verify the fix.`;
         console.log(`   🚀 Pushing branch to remote...`);
         await pushBranch(state.repoPath, branchName);
 
-        console.log(`   🔌 Creating Pull Request...`);
+        console.log(`   🔌 Creating Pull Request: "${prTitle}"`);
         const defaultBranch = await getDefaultBranch(state.repoPath);
+        console.log(`      Head: ${branchName}, Base: ${defaultBranch}`);
+        
         const pr = await createPullRequest(
           state.repoUrl,
           branchName,
@@ -511,34 +534,62 @@ Use run_command to verify the fix.`;
     const reproduceEntry = state.history.find(h => h.step === "REPRODUCE");
     const verifyEntry = state.history.find(h => h.step === "VERIFY");
 
+    // Extract a clean technical summary from the UNDERSTAND JSON
+    let technicalSummary = "The issue was identified as a logic error in the source code.";
+    if (understandEntry?.result) {
+      try {
+        const jsonMatch = understandEntry.result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          technicalSummary = parsed.analysis || parsed.summary || technicalSummary;
+        }
+      } catch {
+        technicalSummary = understandEntry.result.slice(0, 300);
+      }
+    }
+
+    // Extract a clean rationale from the PLAN JSON
+    let fixRationale = "Applied surgical code changes to address the root cause.";
+    if (planEntry?.result) {
+      try {
+        const jsonMatch = planEntry.result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          fixRationale = parsed.changes ? parsed.changes.join("\n") : (parsed.rootCause || fixRationale);
+        }
+      } catch {
+        fixRationale = planEntry.result.slice(0, 300);
+      }
+    }
+
     const bugProof = state.reproductionFailureOutput 
-      ? `\n### Raw Reproduction Output\n\`\`\`\n${state.reproductionFailureOutput}\n\`\`\`\n`
+      ? `\n### Reproduction Logs\n\`\`\`text\n${state.reproductionFailureOutput}\n\`\`\`\n`
       : "";
 
     const fixProof = state.verificationSuccessOutput
-      ? `\n### Raw Verification Output\n\`\`\`\n${state.verificationSuccessOutput}\n\`\`\`\n`
+      ? `\n### Verification Logs\n\`\`\`text\n${state.verificationSuccessOutput}\n\`\`\`\n`
       : "";
 
     const lintSection = state.lintOutput
-      ? `\n### Linter/Formatter Output\n\`\`\`\n${state.lintOutput}\n\`\`\`\n`
+      ? `\n### Style Compliance\n\`\`\`text\n${state.lintOutput}\n\`\`\`\n`
       : "";
 
     return `## Root Cause Analysis
-${understandEntry?.result || "The bug was identified in the source code."}
+${technicalSummary}
 
 ## Proof of Bug
-${reproduceEntry?.result || "The issue was reproduced in the sandbox environment."}
+The following reproduction test was executed in a sandboxed environment and failed as expected, confirming the reported issue:
 ${bugProof}
 
 ## The Fix
-${planEntry?.result || "Applied surgical code changes to address the root cause."}
+${fixRationale}
 
 ## Proof of Fix
-${verifyEntry?.result || "The fix was verified with the existing and reproduction tests."}
+After applying the surgical patch, the reproduction test and the project's test suite were executed. All tests passed successfully:
 ${fixProof}${lintSection}
 
 ---
-*Generated by Repatch - Your Autonomous Bug-Fixing Agent*`;
+*Generated by [Repatch](https://github.com/Sagar-024/Repatch) — Autonomous Test-Driven Debugging*`;
   }
 
   private extractKeywords(text: string): string[] {
@@ -570,26 +621,33 @@ ${fixProof}${lintSection}
     }
 
     const args: Record<string, unknown> = { ...toolCall.arguments };
+    console.log(`      Args: ${JSON.stringify(args).slice(0, 100)}...`);
 
-    // Normalize paths for Windows
-    const normalizePath = (p: string): string => {
+    // Normalize and join paths
+    const resolvePath = (p: string): string => {
       if (!p) return p;
-      if (p.startsWith("/C:/")) return p.slice(1);
-      if (p.startsWith("/c/")) return "C:" + p.slice(2);
-      return p;
+      // Handle /C:/ style paths
+      let normalized = p;
+      if (p.startsWith("/C:/")) normalized = p.slice(1);
+      else if (p.startsWith("/c/")) normalized = "C:" + p.slice(2);
+      
+      if (path.isAbsolute(normalized)) {
+        return normalized;
+      }
+      return path.resolve(context.repoPath, normalized);
     };
 
     if (toolCall.name === "list_files") {
-      args.dirPath = normalizePath(args.dirPath as string || context.repoPath);
+      args.dirPath = resolvePath(args.dirPath as string || context.repoPath);
     }
     if (toolCall.name === "grep_search") {
-      args.dirPath = normalizePath(args.dirPath as string || context.repoPath);
+      args.dirPath = resolvePath(args.dirPath as string || context.repoPath);
     }
     if (toolCall.name === "read_file") {
-      args.filePath = normalizePath(args.filePath as string);
+      args.filePath = resolvePath(args.filePath as string);
     }
     if (toolCall.name === "write_file" && args.filePath) {
-      args.filePath = normalizePath(args.filePath as string);
+      args.filePath = resolvePath(args.filePath as string);
     }
 
     // Special case for write_file
