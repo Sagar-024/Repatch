@@ -39,6 +39,58 @@ export async function fetchIssue(repoUrl: string, issueNumber: number): Promise<
 }
 
 /**
+ * Fork a repository to the authenticated user's account
+ */
+export async function forkRepository(repoUrl: string): Promise<{ owner: string; repo: string; html_url: string }> {
+  const token = process.env.GH_TOKEN;
+  const { owner, repo } = parseRepoUrl(repoUrl);
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/forks`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Failed to fork repository: ${response.statusText} - ${errorBody}`);
+  }
+
+  const data = await response.json() as any;
+  return {
+    owner: data.owner.login,
+    repo: data.name,
+    html_url: data.html_url
+  };
+}
+
+/**
+ * Get authenticated user's login
+ */
+export async function getAuthenticatedUser(): Promise<string> {
+  const token = process.env.GH_TOKEN;
+  const response = await fetch("https://api.github.com/user", {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      Accept: "application/vnd.github.v3+json"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user: ${response.statusText}`);
+  }
+
+  const data = await response.json() as any;
+  return data.login;
+}
+
+/**
  * Create a pull request
  */
 export async function createPullRequest(
@@ -70,7 +122,8 @@ export async function createPullRequest(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to create PR: ${response.statusText}`);
+    const errorBody = await response.text();
+    throw new Error(`Failed to create PR: ${response.statusText} - ${errorBody}`);
   }
 
   return response.json() as Promise<GitHubPR>;

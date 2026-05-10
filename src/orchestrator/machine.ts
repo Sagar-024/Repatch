@@ -4,8 +4,8 @@
 import { AgentState, Step, HistoryEntry, createInitialState } from "./state.js";
 import { createProvider, getDefaultModel, getToolsForLLM, ToolCall, LLMMessage } from "../inference/provider.js";
 import { getTool } from "../tools/registry.js";
-import { createBranch, commitChanges, pushBranch, getDefaultBranch } from "../adapters/git.js";
-import { createPullRequest, hasGitHubToken } from "../adapters/github.ts";
+import { createBranch, commitChanges, pushBranch, getDefaultBranch, setRemoteUrl } from "../adapters/git.js";
+import { createPullRequest, hasGitHubToken, forkRepository, getAuthenticatedUser } from "../adapters/github.ts";
 import { detectLintCommand } from "../sandbox/lint.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -489,16 +489,43 @@ Use run_command to verify the fix.`;
       await commitChanges(state.repoPath, prTitle);
 
       if (process.env.GH_TOKEN) {
-        console.log(`   🚀 Pushing branch to remote...`);
-        await pushBranch(state.repoPath, branchName);
+        let pushTarget = "origin";
+        let headBranch = branchName;
+
+        try {
+          console.log(`   🚀 Attempting to push to original repository...`);
+          await pushBranch(state.repoPath, branchName);
+        } catch (error: any) {
+          const errorMessage = String(error);
+          if (errorMessage.includes("403") || errorMessage.includes("Permission to") || errorMessage.includes("denied")) {
+            console.log(`   ⚠️ Permission denied to original repo. Initiating Auto-Fork...`);
+            
+            // 1. Fork the repo
+            const fork = await forkRepository(state.repoUrl);
+            console.log(`   🍴 Forked successfully: ${fork.html_url}`);
+            
+            // 2. Set new remote URL (Authenticated URL with token)
+            const ghToken = process.env.GH_TOKEN;
+            const forkUrl = `https://${ghToken}@github.com/${fork.owner}/${fork.repo}.git`;
+            await setRemoteUrl(state.repoPath, "origin", forkUrl);
+            
+            // 3. Push to fork
+            console.log(`   🚀 Pushing branch to fork: ${fork.owner}/${fork.repo}...`);
+            await pushBranch(state.repoPath, branchName);
+            
+            // 4. Update headBranch for PR (format is "owner:branch")
+            headBranch = `${fork.owner}:${branchName}`;
+          } else {
+            throw error; // Re-throw if it's not a permission error
+          }
+        }
 
         console.log(`   🔌 Creating Pull Request: "${prTitle}"`);
         const defaultBranch = await getDefaultBranch(state.repoPath);
-        console.log(`      Head: ${branchName}, Base: ${defaultBranch}`);
         
         const pr = await createPullRequest(
           state.repoUrl,
-          branchName,
+          headBranch,
           prTitle,
           narrative,
           defaultBranch

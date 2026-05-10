@@ -87,6 +87,18 @@ export async function commitChanges(repoPath: string, message: string): Promise<
 }
 
 /**
+ * Update the URL for a remote
+ */
+export async function setRemoteUrl(repoPath: string, remoteName: string, newUrl: string): Promise<void> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    await git.remote(["set-url", remoteName, newUrl]);
+  } catch (error: unknown) {
+    throw new Error(`Failed to set remote URL: ${error}`);
+  }
+}
+
+/**
  * Push the current branch to remote
  */
 export async function pushBranch(repoPath: string, branchName: string): Promise<void> {
@@ -111,10 +123,16 @@ export async function getDefaultBranch(repoPath: string): Promise<string> {
   const git: SimpleGit = simpleGit(repoPath);
   const branches = await git.branch();
 
-  // Check common default branch names
-  if (branches.current) return branches.current;
+  // Prioritize common default branch names
+  if (branches.all.includes("origin/main")) return "main";
+  if (branches.all.includes("origin/master")) return "master";
   if (branches.all.includes("main")) return "main";
   if (branches.all.includes("master")) return "master";
+
+  // Fallback to current if it's not a repatch branch
+  if (branches.current && !branches.current.startsWith("repatch/")) {
+    return branches.current;
+  }
 
   return "main";
 }
