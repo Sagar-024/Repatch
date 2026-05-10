@@ -132,7 +132,22 @@ Respond with JSON tool calls.`;
     let response = await provider.complete(messages, tools);
     let iterations = 0;
 
-    while (response.toolCalls && iterations < this.maxIterationsPerStep) {
+    while (iterations < this.maxIterationsPerStep) {
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        // If we have no visited files yet, we MUST keep exploring
+        if (state.visitedFiles.length === 0) {
+          console.log("   ⚠️ No tool call in EXPLORE, forcing continuation...");
+          messages.push({
+            role: "user" as const,
+            content: "You have not visited any files yet. You MUST use 'read_file' to examine the files related to the bug before you can finish this step."
+          });
+          response = await provider.complete(messages, tools);
+          iterations++;
+          continue;
+        }
+        break; // Exit if we have files and model is done
+      }
+
       for (const toolCall of response.toolCalls) {
         console.log(`   🔧 ${toolCall.name}`);
         const result = await this.executeTool(toolCall, toolContext, state);
@@ -186,7 +201,22 @@ Respond with JSON tool calls.`;
     let response = await provider.complete(messages, tools);
     let iterations = 0;
 
-    while (response.toolCalls && iterations < this.maxIterationsPerStep) {
+    while (iterations < this.maxIterationsPerStep) {
+      if (!response.toolCalls || response.toolCalls.length === 0) {
+        // If we haven't run any command yet, we MUST keep trying to reproduce
+        if (!state.reproductionTest) {
+          console.log("   ⚠️ No tool call in REPRODUCE, forcing continuation...");
+          messages.push({
+            role: "user" as const,
+            content: "You have not run a reproduction command yet. You MUST use 'run_command' to prove the bug exists before you can finish this step."
+          });
+          response = await provider.complete(messages, tools);
+          iterations++;
+          continue;
+        }
+        break;
+      }
+
       for (const toolCall of response.toolCalls) {
         console.log(`   🔧 ${toolCall.name}`);
         const result = await this.executeTool(toolCall, toolContext, state);
