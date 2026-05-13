@@ -123,7 +123,7 @@ async function generateDockerfile(repoPath: string): Promise<string> {
   // Use nixpacks to generate a Dockerfile
   const { execa } = await import("execa");
   try {
-    const { stdout } = await execa("nixpacks", ["build", "-o", "-", "--json"], {
+    const { stdout } = await execa("nixpacks", ["build"], {
       cwd: repoPath,
       reject: false
     });
@@ -415,27 +415,15 @@ program
     console.log(`🤖 Step 3: Running autonomous fix loop...`);
     const orchestrator = createOrchestrator(options.model);
     
-    // We run until VERIFY, then check openPr
-    let state = initialState;
-    while (state.currentStep !== "SUBMIT" && state.currentStep !== "VERIFY") {
-      state = await orchestrator.transition(state);
-    }
-
-    // Always run VERIFY if we are not at SUBMIT yet
-    if (state.currentStep === "VERIFY") {
-      state = await orchestrator.transition(state);
-    }
-
-    // Check if we should submit
-    if (options.openPr && state.currentStep === "SUBMIT") {
-      state = await orchestrator.transition(state);
-    } else {
-      console.log(`\n✅ Verification finished. results saved locally.`);
-    }
+    // V1 Decoupled Execution
+    const finalState = await orchestrator.run(initialState);
 
     console.log(`\n✨ Done!`);
-    console.log(`   Steps completed: ${state.history.length}`);
-    console.log(`   Current step: ${state.currentStep}`);
+    console.log(`   Steps completed: ${finalState.history.length}`);
+    console.log(`   Current step: ${finalState.currentStep}`);
+    if (finalState.errorLogs.length > 0) {
+      console.log(`   ⚠️ Errors encountered: ${finalState.errorLogs.length}`);
+    }
   });
 
 program.parse();
