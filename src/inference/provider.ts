@@ -163,10 +163,10 @@ class OpenAIProvider implements LLMProvider {
 
 /**
  * Get the configured model from environment
- * Default: minimax-m2.5-free
+ * Default: deepseek-v4-flash-free
  */
 export function getDefaultModel(): string {
-  return process.env.AI_MODEL || "minimax-m2.5-free";
+  return process.env.AI_MODEL || "deepseek-v4-flash-free";
 }
 
 /**
