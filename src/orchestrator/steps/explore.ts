@@ -23,13 +23,19 @@ export class ExploreStep implements BaseStep {
 REPO PATH: ${state.repoPath}
 KEYWORDS: ${keywords.join(", ")}${hintSection}
 
+MAP OF TRUTH (File Tree):
+${state.fileTree || "Not available"}
+
 ### MISSION:
 Find the EXACT files that contain the bug.
 1. Use 'grep_search' to find the keywords in the codebase.
 2. Whenever you find a file that looks relevant, you MUST call 'read_file' to examine it.
 3. You are NOT finished until you have called 'read_file' on the source files related to the bug.
 
-Respond with JSON tool calls.`;
+### IMPORTANT:
+Before every tool call, you MUST provide a "monologue" explaining your hypothesis and your next action.
+
+Respond with JSON tool calls. The text content before the tool calls will be treated as your monologue.`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
@@ -40,6 +46,11 @@ Respond with JSON tool calls.`;
     let iterations = 0;
 
     while (iterations < this.deps.maxIterations) {
+      if (response.content) {
+        state.monologue = response.content;
+        console.log(`\n💭 Thought: ${state.monologue}`);
+      }
+
       if (!response.toolCalls || response.toolCalls.length === 0) {
         // If we have no visited files yet, we MUST keep exploring
         if (state.visitedFiles.length === 0) {

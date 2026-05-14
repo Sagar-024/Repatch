@@ -66,15 +66,18 @@ export class ExecuteStep implements BaseStep {
 1. SURGICAL EDITS: Use the 'edit_file' tool to apply changes. Do NOT rewrite the whole file unless creating a new one.
 2. EXACT MATCH: 'edit_file' requires an EXACT match of the 'oldSnippet'. Include correct indentation and line endings.
 3. NO EXPLORATION: You have the FULL CONTENT of the relevant files below. Do NOT attempt to read them again.
-4. NO CHAT: Do not explain your actions. Do not apologize. Do not ask for confirmation.
-5. IMMEDIATE ACTION: Your first and only response must be the tool call(s) required to fulfill the PLAN.
+4. NO CHAT: Do not explain your actions in chat. Use the 'monologue' principle instead.
+5. IMMEDIATE ACTION: Your response must include the tool call(s) required to fulfill the PLAN.
+
+### IMPORTANT:
+Before every tool call, you MUST provide a "monologue" explaining your hypothesis and your next action.
 
 ### CONTEXT:
 ISSUE: ${state.issueText}
 PLAN: ${planEntry?.result || "No explicit plan"}${fileContext}
 
 ### EXECUTION:
-Apply the fix to the relevant file(s) NOW using 'edit_file'.`;
+Apply the fix to the relevant file(s) NOW using 'edit_file'. Respond with JSON tool calls. The text content before the tool calls will be treated as your monologue.`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
@@ -86,6 +89,11 @@ Apply the fix to the relevant file(s) NOW using 'edit_file'.`;
 
     while (iterations < this.deps.maxIterations) {
       const response = await provider.complete(messages, tools);
+
+      if (response.content) {
+        state.monologue = response.content;
+        console.log(`\n💭 Thought: ${state.monologue}`);
+      }
 
       if (!response.toolCalls || response.toolCalls.length === 0) {
         if (appliedChanges === 0 && iterations === 0) {

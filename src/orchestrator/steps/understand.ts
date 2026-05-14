@@ -15,10 +15,13 @@ export class UnderstandStep implements BaseStep {
 REPO: ${state.repoUrl}
 ISSUE: ${state.issueText}
 
+MAP OF TRUTH (File Tree):
+${state.fileTree || "Not available"}
+
 Your task is to:
 1. Summarize the bug with technical precision.
 2. Identify the authoritative source for this logic (e.g., Wikipedia for phone plans, Unicode docs, MDN, etc.).
-3. Determine key keywords and likely files.
+3. Determine key keywords and likely files based on the MAP OF TRUTH.
 
 Respond with a JSON object:
 {"summary": "...", "references": ["url1", "url2"], "keywords": [...], "analysis": "..."}`;

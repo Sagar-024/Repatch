@@ -17,13 +17,19 @@ export class VerifyStep implements BaseStep {
 
 REPO PATH: ${state.repoPath}
 
+MAP OF TRUTH (File Tree):
+${state.fileTree || "Not available"}
+
 ### MISSION:
-1. You MUST run the tests to verify the fix.
+1. You MUST run the tests to verify the fix. Use the MAP OF TRUTH to find the correct test files.
 2. Use 'run_command' to execute the reproduction test or any other relevant tests.
 3. If tests fail, you must analyze why.
 4. You are NOT finished until you have proof that the fix works.
 
-Use run_command to verify the fix.`;
+### IMPORTANT:
+Before every tool call, you MUST provide a "monologue" explaining your hypothesis and your next action.
+
+Use run_command to verify the fix. Respond with JSON tool calls. The text content before the tool calls will be treated as your monologue.`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
@@ -36,6 +42,11 @@ Use run_command to verify the fix.`;
     while (iterations < this.deps.maxIterations) {
       const response = await provider.complete(messages, tools);
       
+      if (response.content) {
+        state.monologue = response.content;
+        console.log(`\n💭 Thought: ${state.monologue}`);
+      }
+
       if (!response.toolCalls || response.toolCalls.length === 0) break;
 
       for (const toolCall of response.toolCalls) {

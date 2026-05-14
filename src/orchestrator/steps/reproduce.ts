@@ -15,14 +15,20 @@ export class ReproduceStep implements BaseStep {
 
 REPO PATH: ${state.repoPath}
 
+MAP OF TRUTH (File Tree):
+${state.fileTree || "Not available"}
+
 ### MISSION:
-1. READ the relevant files to understand the current logic.
+1. READ the relevant files to understand the current logic. Use the MAP OF TRUTH to guide your search.
 2. Use 'run_command' to execute tests or scripts that demonstrate the bug.
 3. If you see a test file, run it!
 
+### IMPORTANT:
+Before every tool call, you MUST provide a "monologue" explaining your hypothesis and your next action.
+
 You MUST call 'read_file' if you haven't seen the content of the relevant files yet.
 
-Respond with JSON tool calls.`;
+Respond with JSON tool calls. The text content before the tool calls will be treated as your monologue.`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
@@ -32,6 +38,11 @@ Respond with JSON tool calls.`;
     let iterations = 0;
     while (iterations < this.deps.maxIterations) {
       const response = await provider.complete(messages);
+
+      if (response.content) {
+        state.monologue = response.content;
+        console.log(`\n💭 Thought: ${state.monologue}`);
+      }
 
       if (!response.toolCalls || response.toolCalls.length === 0) {
         if (!state.reproductionTest) {

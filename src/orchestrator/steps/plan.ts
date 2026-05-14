@@ -40,16 +40,19 @@ export class PlanStep implements BaseStep {
 ISSUE: ${state.issueText}
 HINT: ${state.hint || "None"}
 
+MAP OF TRUTH (File Tree):
+${state.fileTree || "Not available"}
+
 EXPLORED CODEBASE CONTEXT:
 ${exploredFiles}
 
 ### MISSION:
-1. Identify the EXACT line(s) that need to change.
+1. Identify the EXACT line(s) that need to change. Use the MAP OF TRUTH to ensure you are targeting the correct files.
 2. Ensure your plan is MINIMAL.
 3. If you do not see the source code for the file that needs fixing in the CONTEXT above, you MUST respond with: "I need to read [file path] before I can plan."
 
 Respond with a JSON plan:
-{"rootCause": "...", "filesToModify": [...], "changes": ["line 1 -> new line 1", ...], "verification": "..."}`;
+{"monologue": "Explain your hypothesis and plan here.", "rootCause": "...", "filesToModify": [...], "changes": ["line 1 -> new line 1", ...], "verification": "..."}`;
 
     const messages: LLMMessage[] = [
       { role: "system" as const, content: systemPrompt },
@@ -58,6 +61,26 @@ Respond with a JSON plan:
 
     const response = await provider.complete(messages);
     
+    // Extract monologue if present in JSON or content
+    try {
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.monologue) {
+          state.monologue = parsed.monologue;
+          console.log(`\n💭 Thought: ${state.monologue}`);
+        }
+      } else if (response.content) {
+        state.monologue = response.content;
+        console.log(`\n💭 Thought: ${state.monologue}`);
+      }
+    } catch {
+       if (response.content) {
+         state.monologue = response.content;
+         console.log(`\n💭 Thought: ${state.monologue}`);
+       }
+    }
+
     // Check if model is asking for more files
     if (response.content.toLowerCase().includes("need to read")) {
        console.log("   ⚠️ Model requested more context. Backtracking to EXPLORE...");

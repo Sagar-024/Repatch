@@ -184,6 +184,11 @@ export class Orchestrator implements StateMachine {
     console.log(`   Repo: ${state.repoUrl}`);
     console.log(`   Issue: ${state.issueText.slice(0, 80)}...\n`);
 
+    // Generate Map of Truth
+    const { generateFileTree } = await import("./utils.js");
+    console.log(`   🗺️ Generating Map of Truth...`);
+    state.fileTree = generateFileTree(state.repoPath);
+
     const maxSteps = 20; // Prevent infinite loops
     let stepCount = 0;
 
