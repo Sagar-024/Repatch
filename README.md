@@ -8,7 +8,7 @@ Repatch is an autonomous, test-driven engineering agent designed to handle the e
 
 ---
 
-## 🛠 Core Pillars
+##  Core Pillars
 
 ### 1. The Inviolable Loop (Empirical TDD)
 Repatch operates on a strict state machine that mandates reproduction before implementation. 
@@ -29,7 +29,7 @@ Leveraging **Nixpacks** and **Docker**, Repatch automatically detects the projec
 
 ---
 
-## 🏗 Technical Architecture
+##  Technical Architecture
 
 ```mermaid
 graph TD
@@ -50,7 +50,7 @@ graph TD
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 - **Node.js 20+**
@@ -73,9 +73,6 @@ npm run dev -- autofix /path/to/repo -i "Calculator returns false for 1+1"
 ```
 
 ---
-
-## 👔 Career Objective
-I am a Senior Software Engineer specializing in autonomous systems, developer tooling, and AI infrastructure. Repatch demonstrates my ability to bridge the gap between LLM reasoning and deterministic engineering rigor. I am focused on building systems that don't just "chat," but **deliver verifiable code**.
 
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
