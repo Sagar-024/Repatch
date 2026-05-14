@@ -1,53 +1,81 @@
-# Repatch: Autonomous Test-Driven Debugging Agent
+# Repatch | Autonomous Engineering Agent
 
-Repatch is an autonomous bug-fixing agent designed to automate the full lifecycle of software debugging. Unlike conventional LLM-based coding assistants that prioritize raw generation, Repatch is built on a foundational principle of **verifiable correctness**. It utilizes a strict state machine to reproduce, isolate, and verify bugs within isolated environments before proposing any modifications to production code.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/Sandboxing-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-This project is an exploration into building high-trust autonomous systems that integrate seamlessly into the modern software development lifecycle (SDLC).
+Repatch is an autonomous, test-driven engineering agent designed to handle the entire bug-fixing lifecycle with zero human intervention. Unlike standard LLM assistants, Repatch is grounded by an **Inviolable Loop** of empirical verification, ensuring that every patch is not just generated, but proven correct in a sandboxed environment.
 
-## Engineering Principles
+---
 
-### The Inviolable Loop (TDD Enforcement)
-Repatch enforces a rigid operational sequence inspired by Test-Driven Development (TDD):
-1.  **Understand**: Structural analysis of the issue report and environment.
-2.  **Explore**: Codebase mapping via restricted filesystem tools to isolate the culprit.
-3.  **Reproduce (Mandatory)**: Generation of a dedicated reproduction test. The agent is strictly prohibited from modifying source code until a failing test demonstrates the bug.
-4.  **Plan**: Design of a minimal, surgical patch targeting only the isolated fault.
-5.  **Execute**: Application of the patch using precise filesystem operations.
-6.  **Verify**: Multi-stage verification including the reproduction test, the full project test suite, and automated linter/formatter checks.
-7.  **Submit**: Generation of an "Engineering Narrative" and automated Pull Request creation.
+## 🛠 Core Pillars
 
-### Environment Abstraction
-Repatch achieves language agnosticity through environment introspection. It utilizes **Nixpacks** to analyze repository signatures and generate optimized OCI-compliant containers. This ensures that every fix is executed in a clean, reproducible, and sandboxed environment that matches the project's specific runtime requirements (Node.js, Python, Go, Rust, etc.).
+### 1. The Inviolable Loop (Empirical TDD)
+Repatch operates on a strict state machine that mandates reproduction before implementation. 
+- **Reproduction-First**: The agent is physically unable to modify source code until it has authored a test case that fails against the current HEAD.
+- **Surgical Execution**: High-precision `edit_file` operations minimize diff noise.
+- **Verification Guarantee**: Every submission includes raw logs of the reproduction failure and the subsequent verification success.
 
-### Trust via Transparency
-Every Pull Request opened by Repatch is a comprehensive proof package. It includes:
-*   **Root Cause Analysis**: A technical breakdown of the isolated fault.
-*   **Raw Reproduction Logs**: Verifiable output of the failing test.
-*   **Raw Verification Logs**: Verifiable output of the passing suite post-fix.
-*   **Style Compliance**: Proof of passing linter/formatter checks.
+### 2. Semantic Path Grounding (Map of Truth)
+To eliminate the "hallucinated paths" common in autonomous agents, Repatch builds a **Semantic Index** of the repository upon initialization. This "Map of Truth" ensures the agent's internal monologue is always grounded in the actual file system structure.
 
-## Technical Architecture
+### 3. Factual Narratives (Zero-Hallucination PRs)
+Repatch generates PR descriptions based exclusively on the **Actual Git Diff**, not the initial plan.
+- **Diff-Grounding**: The agent analyzes the final code changes post-execution to write factual engineering narratives.
+- **Plan Divergence Tracking**: If the implementation diverged from the plan (e.g., "Simplified approach to fix critical import error"), it is explicitly noted.
 
-*   **Orchestration**: A robust state machine managing transitions and backtracking logic.
-*   **Sandbox Manager**: Handles ephemeral Docker lifecycles and Nixpacks build-planning.
-*   **Inference Layer**: A provider-agnostic wrapper supporting OpenAI, Anthropic, and Gemini.
-*   **Tool Registry**: A library of surgical filesystem and shell tools with strict schema validation.
-*   **Adapters**: Decoupled interfaces for Git operations and GitHub API integration.
+### 4. Deterministic Sandboxing
+Leveraging **Nixpacks** and **Docker**, Repatch automatically detects the project's runtime (Node, Python, Go, etc.) and spawns an ephemeral, OCI-compliant container for isolated test execution and linting.
 
-## Usage
+---
 
-### Prerequisites
-*   Docker Desktop (Active daemon)
-*   Node.js 20+
-*   GH_TOKEN (for PR submission)
+## 🏗 Technical Architecture
 
-### Execution
-```bash
-npm run dev -- autofix <repo_url_or_path> -i "Issue description" --hint "Optional guidance"
+```mermaid
+graph TD
+    A[Issue Report] --> B[UNDERSTAND: Structural Analysis]
+    B --> C[EXPLORE: Semantic Path Mapping]
+    C --> D[REPRODUCE: Authors Failing Test]
+    D --> E[PLAN: Surgical Patch Design]
+    E --> F[EXECUTE: Intent-Based Code Modification]
+    F --> G[VERIFY: Multi-Stage Validation]
+    G --> H[SUBMIT: Diff-Grounded PR Creation]
+    G -- Fails --> E
 ```
 
-## Career Objective
-I am a software engineer focused on building robust, automated systems at the intersection of infrastructure and AI. This project serves as a demonstration of my ability to design complex, multi-layered architectures that prioritize security, reliability, and developer experience. I am currently seeking opportunities to apply these skills within high-growth engineering teams.
+- **Orchestration**: Decoupled Step Pattern (Strategy Pattern) for robust state transitions.
+- **Inference Layer**: Provider-agnostic wrapper supporting OpenAI, Anthropic, and Gemini.
+- **Fuzzy Matching**: Custom sliding-window algorithm for surgical code edits that resist minor whitespace/indentation shifts.
+- **Persistence Middleware**: Checkpoint-based state management for long-running autonomous tasks.
 
-## License
-MIT
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Node.js 20+**
+- **Docker Desktop** (Daemon must be running)
+- **GH_TOKEN** (Exported in your environment for PR submission)
+
+### Installation
+```bash
+git clone https://github.com/Sagar-024/Repatch.git
+cd Repatch
+npm install
+npm run build
+```
+
+### Usage
+Run the agent against any public repository or local path:
+```bash
+# Example: Fix a logic error in a local repo
+npm run dev -- autofix /path/to/repo -i "Calculator returns false for 1+1"
+```
+
+---
+
+## 👔 Career Objective
+I am a Senior Software Engineer specializing in autonomous systems, developer tooling, and AI infrastructure. Repatch demonstrates my ability to bridge the gap between LLM reasoning and deterministic engineering rigor. I am focused on building systems that don't just "chat," but **deliver verifiable code**.
+
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
