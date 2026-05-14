@@ -26,7 +26,7 @@ export function listFiles(dirPath: string, pattern?: string): string[] {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
 
-      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") {
+      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist" || entry.name === ".repatch") {
         continue;
       }
 

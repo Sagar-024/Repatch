@@ -143,13 +143,19 @@ Apply the fix to the relevant file(s) NOW using 'edit_file'. Respond with JSON t
 
         if (result && (result.success || result.path)) {
           appliedChanges++;
+        } else {
+          const errorMsg = result?.error || "Unknown error";
+          console.error(`   ❌ Tool failed: ${errorMsg}`);
+          state.errorLogs.push(`Execution tool failed (${toolCall.name}): ${errorMsg}`);
         }
 
         messages.push({ role: "assistant" as const, content: `[Called ${toolCall.name}]` });
-        messages.push({ role: "user" as const, content: `Result: ${JSON.stringify(result).slice(0, 200)}` });
+        messages.push({ role: "user" as const, content: `Result: ${JSON.stringify(result).slice(0, 500)}` });
 
         if (toolCall.name === "edit_file" || toolCall.name === "write_file") {
-          state.fixPatch = (state.fixPatch || "") + `\n${toolCall.name}: ${JSON.stringify(toolCall.arguments)}`;
+          if (result && (result.success || result.path)) {
+            state.fixPatch = (state.fixPatch || "") + `\n${toolCall.name}: ${JSON.stringify(toolCall.arguments)}`;
+          }
         }
       }
       iterations++;
@@ -158,12 +164,12 @@ Apply the fix to the relevant file(s) NOW using 'edit_file'. Respond with JSON t
     state.history.push({
       step: this.name,
       action: "Applied fixes",
-      result: `Applied ${appliedChanges} changes`,
+      result: appliedChanges > 0 ? `Applied ${appliedChanges} changes` : "Failed to apply any changes",
       timestamp: Date.now()
     });
 
     return {
-      nextStep: "VERIFY",
+      nextStep: appliedChanges > 0 ? "VERIFY" : "PLAN", // Backtrack to PLAN if nothing was applied
       state
     };
   }

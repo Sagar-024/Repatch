@@ -107,6 +107,42 @@ export async function getModifiedFiles(repoPath: string): Promise<string[]> {
 }
 
 /**
+ * Get the actual diff of changes made in the repository
+ */
+export async function getDiff(repoPath: string): Promise<string> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    // Intent-to-add untracked files so they show up in diff
+    const status = await git.status();
+    for (const file of status.not_added) {
+      await git.add(["-N", file]);
+    }
+    
+    // Get diff of everything compared to HEAD
+    return await git.diff(["HEAD"]);
+  } catch (error) {
+    console.error(`Error generating diff: ${error}`);
+    return "";
+  }
+}
+
+/**
+ * Get a high-level stat summary of changes
+ */
+export async function getDiffStat(repoPath: string): Promise<string> {
+  const git: SimpleGit = simpleGit(repoPath);
+  try {
+    const status = await git.status();
+    for (const file of status.not_added) {
+      await git.add(["-N", file]);
+    }
+    return await git.diff(["HEAD", "--stat"]);
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Update the URL for a remote
  */
 export async function setRemoteUrl(repoPath: string, remoteName: string, newUrl: string): Promise<void> {
