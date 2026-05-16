@@ -66,11 +66,20 @@ npm run build
 ```
 
 ### Usage
-Run the agent against any public repository or local path:
+Repatch is designed with a **Reproduction-First** UX to build trust.
+
+#### 1. Reproduce the bug (Safe, Read-Only)
+Generate a verifiable reproduction test in a sandbox without touching your source code.
 ```bash
-# Example: Fix a logic error in a local repo
-npm run dev -- autofix /path/to/repo -i "Calculator returns false for 1+1"
+npm run dev -- reproduce <repo-url> -i "Issue description"
 ```
+
+#### 2. Fix the bug (Autonomous patching)
+Run the full loop to reproduce, fix, and open a PR (with an interactive review gate).
+```bash
+npm run dev -- fix <repo-url> -i "Issue description"
+```
+
 
 ---
 

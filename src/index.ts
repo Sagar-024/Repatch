@@ -17,58 +17,6 @@ program
   .version("0.1.0");
 
 program
-  .command("fix <url>")
-  .description("Clone a repo and set up the sandbox environment")
-  .option("-t, --target <dir>", "Target directory for cloning", ".pr-fixer-temp")
-  .action(async (url: string, options: { target: string }) => {
-    console.log(`\n🛠️  PR-Fixer starting...\n`);
-
-    const targetDir = path.resolve(process.cwd(), options.target);
-
-    // Story 1: Repo Cloning & Auth
-    console.log(`📦 Step 1: Cloning repository...`);
-    console.log(`   URL: ${url}`);
-    try {
-      await cloneRepo(url, targetDir);
-      console.log(`   ✅ Cloned to: ${targetDir}\n`);
-    } catch (error) {
-      console.error(`   ❌ Clone failed: ${error}`);
-      process.exit(1);
-    }
-
-    // Story 2: Zero-Config Detection
-    console.log(`🔍 Step 2: Detecting environment with Nixpacks...`);
-    try {
-      const plan = await getBuildPlan(targetDir);
-      console.log(`   ✅ Detected: ${plan.builder}`);
-      console.log(`   📋 Build plan: ${JSON.stringify(plan, null, 2)}\n`);
-    } catch (error) {
-      console.error(`   ❌ Detection failed: ${error}`);
-      process.exit(1);
-    }
-
-    // Story 3: Sandboxed Execution
-    console.log(`🐳 Step 3: Building Docker sandbox...`);
-    try {
-      const dockerfile = await generateDockerfile(targetDir);
-      const imageTag = "pr-fixer-sandbox:latest";
-      await buildImage(dockerfile, imageTag);
-      console.log(`   ✅ Image built: ${imageTag}\n`);
-
-      console.log(`🚀 Step 4: Running smoke test in container...`);
-      const result = await runInContainer(imageTag, "ls -la");
-      console.log(`   📄 Container output:`);
-      console.log(result.stdout);
-      console.log(`   ✅ Sandboxed execution successful!\n`);
-    } catch (error) {
-      console.error(`   ❌ Sandbox failed: ${error}`);
-      process.exit(1);
-    }
-
-    console.log(`✨ Epic 1 complete! Environment foundation ready.`);
-  });
-
-program
   .command("verify <url>")
   .description("Verify repo can be cloned and containerized (smoke test)")
   .action(async (url: string) => {
@@ -355,8 +303,84 @@ async function executeTool(toolCall: ToolCall, context: { repoPath: string }): P
 }
 
 program
-  .command("autofix <repo-url>")
-  .description("Run autonomous PR fixing (Epic 3 & 4: Understand to Submit)")
+  .command("reproduce <repo-url>")
+  .description("Autonomously reproduce a bug and generate a failing test artifact")
+  .option("-i, --issue <text>", "Issue description or GitHub issue URL")
+  .option("-m, --model <model>", "AI model to use", getDefaultModel())
+  .option("-t, --target <dir>", "Target directory for cloning", ".pr-fixer-temp")
+  .option("-h, --hint <text>", "Provide a hint to steer the agent")
+  .action(async (repoUrl: string, options: { issue?: string; model: string; target: string; hint?: string }) => {
+    console.log(`\n🧪 Repatch: Autonomous Bug Reproduction\n`);
+    console.log(`   Repo: ${repoUrl}`);
+    console.log(`   Model: ${options.model}`);
+    console.log(`   Issue: ${options.issue || "User provided"}`);
+    console.log(`   Hint: ${options.hint || "None"}\n`);
+
+    const { createOrchestrator } = await import("./orchestrator/machine.js");
+    const { createInitialState } = await import("./orchestrator/state.js");
+
+    const targetDir = path.resolve(process.cwd(), options.target);
+    const inputPath = path.resolve(repoUrl);
+    const isLocalPath = fs.existsSync(inputPath);
+
+    console.log(`📦 Step 1: ${isLocalPath ? "Using local repository" : "Cloning repository"}...`);
+    try {
+      if (isLocalPath) {
+        console.log(`   📂 Using: ${inputPath}\n`);
+      } else {
+        await cloneRepo(repoUrl, targetDir);
+        console.log(`   ✅ Cloned to: ${targetDir}\n`);
+      }
+    } catch (error) {
+      console.error(`   ❌ Repository access failed: ${error}`);
+      process.exit(1);
+    }
+
+    const workingDir = isLocalPath ? inputPath : targetDir;
+
+    console.log(`🐳 Step 2: Building sandbox...`);
+    let imageTag = "pr-fixer-sandbox:latest";
+    try {
+      const dockerfile = await generateDockerfile(workingDir);
+      const { buildImage } = await import("./sandbox/docker.js");
+      await buildImage(dockerfile, imageTag);
+      console.log(`   ✅ Image built: ${imageTag}\n`);
+    } catch (error) {
+      console.error(`   ❌ Sandbox build failed: ${error}`);
+      process.exit(1);
+    }
+
+    const issueText = options.issue || "Fix the bug described in the repository";
+    const initialState = createInitialState(repoUrl, "", issueText, workingDir, options.hint);
+
+    console.log(`🤖 Step 3: Running reproduction loop...`);
+    const orchestrator = createOrchestrator(options.model);
+    
+    // Custom run loop that stops after REPRODUCE
+    let state = initialState;
+    const stepsToRun = ["UNDERSTAND", "EXPLORE", "REPRODUCE"];
+    
+    for (const step of stepsToRun) {
+      state.currentStep = step as any;
+      state = await orchestrator.transition(state);
+      if (state.errorLogs.length > 0 && state.currentStep !== "REPRODUCE") {
+        console.error(`   ❌ Error during ${step}, aborting.`);
+        break;
+      }
+    }
+
+    console.log(`\n✨ Reproduction attempt complete!`);
+    console.log(`   Steps completed: ${state.history.length}`);
+    if (state.reproductionTest) {
+      console.log(`   ✅ Reproduction artifact: ${state.reproductionTest}`);
+    } else {
+      console.log(`   ⚠️ No reproduction test was authored.`);
+    }
+  });
+
+program
+  .command("fix <repo-url>")
+  .description("Run the full autonomous fixing loop (Reproduce -> Fix -> PR)")
   .option("-i, --issue <text>", "Issue description or GitHub issue URL")
   .option("-m, --model <model>", "AI model to use", getDefaultModel())
   .option("-t, --target <dir>", "Target directory for cloning", ".pr-fixer-temp")
@@ -385,7 +409,7 @@ program
       if (isLocalPath) {
         console.log(`   📂 Using: ${inputPath}\n`);
       } else {
-        await cloneRepo(repoUrl, targetDir);
+        await (await import("./adapters/git.js")).cloneRepo(repoUrl, targetDir);
         console.log(`   ✅ Cloned to: ${targetDir}\n`);
       }
     } catch (error) {
@@ -425,5 +449,6 @@ program
       console.log(`   ⚠️ Errors encountered: ${finalState.errorLogs.length}`);
     }
   });
+
 
 program.parse();

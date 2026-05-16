@@ -13,18 +13,26 @@
     "dev": "tsx src/index.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
-  "keywords": ["pr", "fixer", "ai", "autonomous"],
+  "keywords": [
+    "pr",
+    "fixer",
+    "ai",
+    "autonomous"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "commander": "^12.1.0",
+    "dockerode": "^4.0.2",
     "execa": "^9.5.2",
-    "simple-git": "^3.27.0",
-    "dockerode": "^4.0.2"
+    "simple-git": "^3.27.0"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.31",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.10.5",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.9",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

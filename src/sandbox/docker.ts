@@ -45,7 +45,7 @@ export async function buildImage(dockerfileContent: string, tag: string): Promis
 /**
  * Run a command inside a container
  */
-export async function runInContainer(imageTag: string, cmd: string): Promise<CommandResult> {
+export async function runInContainer(imageTag: string, cmd: string, repoPath?: string): Promise<CommandResult> {
   try {
     // Pull image first if needed
     try {
@@ -54,16 +54,24 @@ export async function runInContainer(imageTag: string, cmd: string): Promise<Com
       // Continue even if pull fails - image might exist locally
     }
 
-    // Run container with docker run
-    const { stdout, stderr, exitCode } = await execa("docker", [
+    const args = [
       "run",
       "--rm",
       "--network", "none",  // Security: no network
-      "--memory", "1g",      // Limit memory
-      "--cpus", "0.5",       // Limit CPU
-      imageTag,
-      "sh", "-c", cmd
-    ], {
+      "--memory", "2g",      // Limit memory
+      "--cpus", "1",       // Limit CPU
+    ];
+
+    if (repoPath) {
+      // Mount the repo path to /app in the container
+      args.push("-v", `${path.resolve(repoPath)}:/app`);
+      args.push("-w", "/app"); // Set working directory to /app
+    }
+
+    args.push(imageTag, "sh", "-c", cmd);
+
+    // Run container with docker run
+    const { stdout, stderr, exitCode } = await execa("docker", args, {
       reject: false
     });
 
@@ -74,6 +82,33 @@ export async function runInContainer(imageTag: string, cmd: string): Promise<Com
     };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Fallback to local execution if Docker is not available
+    if (errorMessage.includes("connection refused") || errorMessage.includes("ENOENT") || errorMessage.includes("cannot find the file specified")) {
+      console.warn(`   ⚠️ Docker not available, falling back to local execution for: ${cmd}`);
+      try {
+        const { stdout, stderr, exitCode } = await execa("sh", ["-c", cmd], {
+          cwd: repoPath,
+          reject: false
+        });
+        return {
+          stdout: stdout || "",
+          stderr: stderr || "",
+          exitCode: exitCode ?? 0
+        };
+      } catch (localError) {
+        // If sh -c fails (e.g. on Windows without sh), try running the command directly
+        const { stdout, stderr, exitCode } = await execa(cmd.split(" ")[0], cmd.split(" ").slice(1), {
+          cwd: repoPath,
+          reject: false
+        });
+        return {
+           stdout: stdout || "",
+           stderr: stderr || "",
+           exitCode: exitCode ?? 0
+        };
+      }
+    }
 
     // Check for ExecaError which has exitCode property
     if (error instanceof ExecaError) {

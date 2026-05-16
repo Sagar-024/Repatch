@@ -184,6 +184,7 @@ export class SubmitStep implements BaseStep {
     let currentFiles = files;
 
     const diffStat = await getDiffStat(repoPath);
+    const fullDiff = await getDiff(repoPath);
 
     const provider = createProvider({ model: this.deps.model, temperature: 0 });
 
@@ -195,10 +196,20 @@ export class SubmitStep implements BaseStep {
       console.log(`\n📄 SUMMARY:\n${currentNarrative.slice(0, 500)}${currentNarrative.length > 500 ? "..." : ""}`);
       console.log(`\n📁 FILES TO COMMIT (${currentFiles.length}):`);
       currentFiles.forEach(f => console.log(`   - ${f}`));
+      
+      if (fullDiff) {
+        console.log(`\n📄 FULL DIFF:`);
+        console.log("-".repeat(30));
+        console.log(fullDiff.slice(0, 2000));
+        if (fullDiff.length > 2000) console.log("... (diff truncated)");
+        console.log("-".repeat(30));
+      }
+
       if (diffStat) {
         console.log(`\n📊 DIFF STAT:\n${diffStat}`);
       }
       console.log("\n" + "=".repeat(60));
+
 
       const answer = await rl.question(
         "\n✅ Approve this PR? (y/yes) or provide feedback to modify it: "

@@ -21,7 +21,16 @@ This project takes inspiration from the best systems (like Claude Code) that mak
 
 A brilliant architecture makes the same LLM feel like a genius. That’s what we’re building.
 
+## The Hybrid Wedge (Strategic Trust)
+
+Repatch solves the AI trust gap by splitting its power into two modes:
+1.  **Reproduction-as-a-Service (`reproduce`):** A read-only command that produces a "Golden Artifact"—a verified, failing test case in a sandbox. This gives maintainers immediate value with zero risk.
+2.  **Autonomous Fix (`fix`):** Building on the reproduction, this mode applies a patch and raises a PR, but only after an **Interactive Review Gate** where the maintainer approves the diff.
+
+By leading with reproduction, we build the "Whoa" moment that earns the right to fix the code.
+
 ## The Inviolable Loop (Every Fix, No Exceptions)
+
 
 1. **Understand** — Parse the issue. What’s expected, what’s broken?
 2. **Explore** — Navigate the codebase (list files, grep, read) until the culprit module is found.

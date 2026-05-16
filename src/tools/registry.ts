@@ -1,6 +1,7 @@
 // Tool registration and schema exports
 
-import { listFiles, readFile, grepSearch, FileResult, GrepResult, editFile } from "./filesystem.js";
+import { listFiles, readFile, grepSearch, FileResult, GrepResult, editFile, createReproductionTest } from "./filesystem.js";
+
 import { runInContainer, CommandResult } from "../sandbox/docker.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -70,14 +71,16 @@ export const tools: Tool[] = [
     parameters: {
       type: "object",
       properties: {
-        imageTag: { type: "string" },
-        cmd: { type: "string" }
+        imageTag: { type: "string", description: "The Docker image tag to use" },
+        cmd: { type: "string", description: "The command to run inside the container" },
+        repoPath: { type: "string", description: "The host path to mount into the container" }
       },
       required: ["imageTag", "cmd"]
     },
-    handler: async (args: { imageTag: string; cmd: string }): Promise<CommandResult> =>
-      runInContainer(args.imageTag, args.cmd)
+    handler: async (args: { imageTag: string; cmd: string; repoPath?: string }): Promise<CommandResult> =>
+      runInContainer(args.imageTag, args.cmd, args.repoPath)
   },
+
   {
     name: "write_file",
     description: "Write content to a file (creates or overwrites)",
@@ -106,8 +109,24 @@ export const tools: Tool[] = [
     },
     handler: async (args: { filePath: string; oldSnippet: string; newSnippet: string }) =>
       editFile(args.filePath, args.oldSnippet, args.newSnippet)
+  },
+  {
+    name: "create_reproduction_test",
+    description: "Create a dedicated reproduction test file to prove a bug exists.",
+    parameters: {
+      type: "object",
+      properties: {
+        dirPath: { type: "string", description: "The directory to create the test in" },
+        content: { type: "string", description: "The full content of the test file" },
+        fileName: { type: "string", description: "The name of the test file (default: reproduce.test.ts)" }
+      },
+      required: ["dirPath", "content"]
+    },
+    handler: async (args: { dirPath: string; content: string; fileName?: string }) =>
+      createReproductionTest(args.dirPath, args.content, args.fileName)
   }
 ];
+
 
 export function getTool(name: string): Tool | undefined {
   return tools.find(t => t.name === name);

@@ -1,6 +1,6 @@
 import { AgentState, Step } from "../state.js";
 import { BaseStep, StepDependencies, StepResult } from "./base.js";
-import { createProvider, LLMMessage } from "../../inference/provider.js";
+import { createProvider, getToolsForLLM, LLMMessage } from "../../inference/provider.js";
 
 export class ReproduceStep implements BaseStep {
   readonly name: Step = "REPRODUCE";
@@ -9,6 +9,7 @@ export class ReproduceStep implements BaseStep {
 
   async execute(state: AgentState): Promise<StepResult> {
     const provider = createProvider({ model: this.deps.model });
+    const tools = getToolsForLLM();
     const toolContext = { repoPath: state.repoPath };
 
     const systemPrompt = `You are reproducing the bug in a local sandbox.
@@ -20,10 +21,12 @@ ${state.fileTree || "Not available"}
 
 ### MISSION:
 1. READ the relevant files to understand the current logic. Use the MAP OF TRUTH to guide your search.
-2. Use 'run_command' to execute tests or scripts that demonstrate the bug.
-3. If you see a test file, run it!
+2. Author a dedicated reproduction test using 'create_reproduction_test' that PROVES the bug exists.
+3. Use 'run_command' to execute the authored test and confirm it fails.
 
 ### IMPORTANT:
+The most important artifact from this step is the reproduction test file. You MUST author it.
+
 Before every tool call, you MUST provide a "monologue" explaining your hypothesis and your next action.
 
 You MUST call 'read_file' if you haven't seen the content of the relevant files yet.
@@ -37,7 +40,7 @@ Respond with JSON tool calls. The text content before the tool calls will be tre
 
     let iterations = 0;
     while (iterations < this.deps.maxIterations) {
-      const response = await provider.complete(messages);
+      const response = await provider.complete(messages, tools);
 
       if (response.content) {
         state.monologue = response.content;

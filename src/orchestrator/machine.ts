@@ -114,12 +114,18 @@ export class Orchestrator implements StateMachine {
     if (toolCall.name === "read_file") {
       args.filePath = resolvePath(args.filePath as string);
     }
-    if (toolCall.name === "write_file" && args.filePath) {
-      args.filePath = resolvePath(args.filePath as string);
-    }
     if (toolCall.name === "edit_file" && args.filePath) {
       args.filePath = resolvePath(args.filePath as string);
     }
+    if (toolCall.name === "create_reproduction_test" && args.dirPath) {
+      args.dirPath = resolvePath(args.dirPath as string);
+    }
+    if (toolCall.name === "run_command") {
+      args.repoPath = context.repoPath;
+    }
+
+
+
 
     // Special case for write_file
     if (toolCall.name === "write_file") {

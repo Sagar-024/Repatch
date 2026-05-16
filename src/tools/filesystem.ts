@@ -132,11 +132,30 @@ export function editFile(filePath: string, oldSnippet: string, newSnippet: strin
 }
 
 /**
+ * Create a dedicated reproduction test file
+ */
+export function createReproductionTest(dirPath: string, content: string, fileName = "reproduce.test.ts"): { success: boolean; path: string; error?: string } {
+  try {
+    const filePath = path.join(dirPath, fileName);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, content, "utf-8");
+    return { success: true, path: filePath };
+  } catch (error: unknown) {
+    return { success: false, path: "", error: String(error) };
+  }
+}
+
+/**
  * Check if a file exists
  */
 export function fileExists(filePath: string): boolean {
   return fs.existsSync(filePath);
 }
+
+
 
 /**
  * Get file stats

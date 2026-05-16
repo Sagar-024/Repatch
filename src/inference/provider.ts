@@ -233,6 +233,19 @@ export function getToolsForLLM(): ToolDefinition[] {
         },
         required: ["filePath", "content"]
       }
+    },
+    {
+      name: "create_reproduction_test",
+      description: "Create a dedicated reproduction test file to prove a bug exists.",
+      parameters: {
+        type: "object",
+        properties: {
+          dirPath: { type: "string", description: "The directory to create the test in" },
+          content: { type: "string", description: "The full content of the test file" },
+          fileName: { type: "string", description: "The name of the test file (default: reproduce.test.ts)" }
+        },
+        required: ["dirPath", "content"]
+      }
     }
   ];
 }
