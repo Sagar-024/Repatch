@@ -1,39 +1,59 @@
 {
-  "name": "pr-fixer",
+  "name": "repatch",
   "version": "0.1.0",
-  "description": "Junior Developer in a box - Autonomous PR fixer",
+  "description": "Autonomous bug-fixing agent — reproduce, fix, verify, and submit PRs",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "pr-fixer": "dist/index.js"
+    "repatch": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
-    "pr",
-    "fixer",
-    "ai",
-    "autonomous"
+    "repatch",
+    "bug-fix",
+    "autonomous-agent",
+    "code-review",
+    "llm",
+    "github"
   ],
-  "author": "",
+  "author": "Sagar Kharal <sarkharal024@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sagar-024/Repatch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sagar-024/Repatch/issues"
+  },
+  "homepage": "https://github.com/Sagar-024/Repatch#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@types/js-yaml": "^4.0.9",
+    "chalk": "^5.6.2",
     "commander": "^12.1.0",
     "dockerode": "^4.0.2",
+    "dotenv": "^17.4.2",
     "execa": "^9.5.2",
-    "simple-git": "^3.27.0"
+    "glob": "^13.0.6",
+    "js-yaml": "^4.1.1",
+    "ora": "^9.4.0",
+    "simple-git": "^3.27.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.31",
-    "@types/jest": "^30.0.0",
+    "@types/glob": "^8.1.0",
     "@types/node": "^22.10.5",
-    "jest": "^30.4.2",
-    "ts-jest": "^29.4.9",
+    "@vitest/coverage-v8": "^4.1.6",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.6"
   }
 }
