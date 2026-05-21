@@ -14,9 +14,6 @@ export interface GrepResult {
   content: string;
 }
 
-/**
- * List files in a directory recursively
- */
 export function listFiles(dirPath: string, pattern?: string): string[] {
   const files: string[] = [];
 
@@ -48,9 +45,6 @@ export function listFiles(dirPath: string, pattern?: string): string[] {
   return files;
 }
 
-/**
- * Read a file and return its content with line numbers
- */
 export function readFile(filePath: string): FileResult {
   const content = fs.readFileSync(filePath, "utf-8");
   const lines = content.split("\n");
@@ -65,9 +59,6 @@ export function readFile(filePath: string): FileResult {
   };
 }
 
-/**
- * Search for a pattern in files
- */
 export function grepSearch(pattern: string, dirPath: string, extensions?: string[]): GrepResult[] {
   const results: GrepResult[] = [];
   const regex = new RegExp(pattern, "i"); // Remove 'g' flag for simple line-by-line matching
@@ -104,9 +95,6 @@ export function grepSearch(pattern: string, dirPath: string, extensions?: string
   return results;
 }
 
-/**
- * Surgical snippet replacement in a file
- */
 export function editFile(filePath: string, oldSnippet: string, newSnippet: string): { success: boolean; error?: string } {
   try {
     const content = fs.readFileSync(filePath, "utf-8");
@@ -131,9 +119,6 @@ export function editFile(filePath: string, oldSnippet: string, newSnippet: strin
   }
 }
 
-/**
- * Create a dedicated reproduction test file
- */
 export function createReproductionTest(dirPath: string, content: string, fileName = "reproduce.test.ts"): { success: boolean; path: string; error?: string } {
   try {
     const filePath = path.join(dirPath, fileName);
@@ -148,18 +133,12 @@ export function createReproductionTest(dirPath: string, content: string, fileNam
   }
 }
 
-/**
- * Check if a file exists
- */
 export function fileExists(filePath: string): boolean {
   return fs.existsSync(filePath);
 }
 
 
 
-/**
- * Get file stats
- */
 export function getFileStats(filePath: string): { size: number; modified: Date } | null {
   try {
     const stats = fs.statSync(filePath);

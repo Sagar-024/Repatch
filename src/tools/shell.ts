@@ -27,10 +27,7 @@ interface RunCommandOptions {
   env?: Record<string, string>;
 }
 
-/**
- * Run a command inside a sandboxed container
- * @deprecated Use runInContainer from sandbox/docker directly
- */
+/** @deprecated Use runInContainer from sandbox/docker directly */
 export async function runCommand(
   imageTag: string,
   cmd: string,
@@ -39,9 +36,6 @@ export async function runCommand(
   return runInContainer(imageTag, cmd);
 }
 
-/**
- * Validate a command against the allowlist
- */
 export function validateCommand(cmd: string): { valid: boolean; reason?: string } {
   const lowerCmd = cmd.toLowerCase();
 
@@ -74,9 +68,6 @@ export function validateCommand(cmd: string): { valid: boolean; reason?: string 
   return { valid: true };
 }
 
-/**
- * Build environment variables string
- */
 export function buildEnvVars(env: Record<string, string> = {}): string {
   return Object.entries(env)
     .map(([k, v]) => `${k}=${v}`)

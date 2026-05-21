@@ -9,9 +9,6 @@ export interface FileContext {
   language: string;
 }
 
-/**
- * Read a file and return its content with metadata
- */
 export function readFileContext(filePath: string): FileContext {
   const content = fs.readFileSync(filePath, "utf-8");
   const ext = path.extname(filePath);
@@ -24,16 +21,10 @@ export function readFileContext(filePath: string): FileContext {
   };
 }
 
-/**
- * Read multiple files and return context
- */
 export function readFilesContext(filePaths: string[]): FileContext[] {
   return filePaths.map(readFileContext);
 }
 
-/**
- * Prune context to fit within token limits (basic implementation)
- */
 export function pruneContext(files: FileContext[], maxTokens: number = 32000): FileContext[] {
   const result: FileContext[] = [];
 
@@ -44,7 +35,6 @@ export function pruneContext(files: FileContext[], maxTokens: number = 32000): F
     if (estimatedTokens <= remaining) {
       result.push(file);
     } else {
-      // Truncate file
       const maxLines = Math.floor(remaining / 1.5);
       result.push({
         ...file,
@@ -80,9 +70,6 @@ function getLanguageFromExt(ext: string): string {
   return extMap[ext] || "unknown";
 }
 
-/**
- * List files in a directory recursively
- */
 export function listFiles(dirPath: string, exclude: string[] = ["node_modules", ".git", "dist"]): string[] {
   const files: string[] = [];
 

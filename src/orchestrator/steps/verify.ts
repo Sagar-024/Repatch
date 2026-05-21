@@ -11,7 +11,7 @@ export class VerifyStep implements BaseStep {
 
   async execute(state: AgentState): Promise<StepResult> {
     const provider = createProvider({ model: this.deps.model });
-    const tools = getToolsForLLM();
+    const tools = await getToolsForLLM();
 
     const systemPrompt = `You are verifying that the fix works.
 
@@ -49,12 +49,22 @@ Use run_command to verify the fix. Respond with JSON tool calls. The text conten
 
       if (!response.toolCalls || response.toolCalls.length === 0) break;
 
+      messages.push({
+        role: "assistant" as const,
+        content: response.content || "",
+        toolCalls: response.toolCalls
+      });
+
       for (const toolCall of response.toolCalls) {
         console.log(`   🔧 ${toolCall.name}`);
         const result = await this.deps.executeTool(toolCall, state);
 
-        messages.push({ role: "assistant" as const, content: `[Called ${toolCall.name}]` });
-        messages.push({ role: "user" as const, content: `Result: ${JSON.stringify(result).slice(0, 500)}` });
+        messages.push({
+          role: "tool" as const,
+          name: toolCall.name,
+          toolCallId: toolCall.id,
+          content: JSON.stringify(result)
+        });
 
         if (toolCall.name === "run_command") {
           const cmdResult = result as { stdout: string; stderr: string; exitCode: number };
@@ -74,6 +84,7 @@ Use run_command to verify the fix. Respond with JSON tool calls. The text conten
       if (formatCmd) {
         console.log(`   🔧 Running formatter: ${formatCmd}`);
         await this.deps.executeTool({
+          id: `verify_fmt_${Date.now()}`,
           name: "run_command",
           arguments: { cmd: formatCmd, imageTag: "pr-fixer-sandbox:latest" }
         }, state);
@@ -84,6 +95,7 @@ Use run_command to verify the fix. Respond with JSON tool calls. The text conten
       if (lintCmd) {
         console.log(`   🔧 Running linter: ${lintCmd}`);
         const lintResult = await this.deps.executeTool({
+          id: `verify_lint_${Date.now()}`,
           name: "run_command",
           arguments: { cmd: lintCmd, imageTag: "pr-fixer-sandbox:latest" }
         }, state) as { stdout: string; stderr: string; exitCode: number };

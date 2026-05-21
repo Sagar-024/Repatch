@@ -1,5 +1,6 @@
 import { simpleGit, SimpleGit } from "simple-git";
 import * as path from "path";
+import * as fs from "fs";
 
 /**
  * Clone a GitHub repository (supports HTTPS and SSH URLs)
@@ -9,7 +10,6 @@ export async function cloneRepo(url: string, targetDir: string): Promise<void> {
   const git: SimpleGit = simpleGit();
   const ghToken = process.env.GH_TOKEN;
 
-  // Parse the URL and add authentication if token is available
   let cloneUrl = url;
 
   if (ghToken) {
@@ -27,16 +27,16 @@ export async function cloneRepo(url: string, targetDir: string): Promise<void> {
     }
   }
 
-  const options: { directory?: string } = {};
-
   // If target directory exists and has .git, don't clone (already exists)
-  // Otherwise clone fresh
+  if (await isGitRepo(targetDir)) {
+    return;
+  }
+
   try {
     await git.clone(cloneUrl, targetDir, ["--depth", "1"]);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Parse specific error cases
     if (errorMessage.includes("Authentication failed") || errorMessage.includes("401")) {
       throw new Error("Access denied. Check GH_TOKEN or SSH keys.");
     } else if (errorMessage.includes("not found") || errorMessage.includes("404")) {
@@ -49,21 +49,29 @@ export async function cloneRepo(url: string, targetDir: string): Promise<void> {
   }
 }
 
-/**
- * Check if a directory is a valid git repository
- */
-export async function isGitRepo(dirPath: string): Promise<boolean> {
-  const git: SimpleGit = simpleGit(dirPath);
+export async function checkoutPR(repoPath: string, prNumber: number): Promise<void> {
+  const git: SimpleGit = simpleGit(repoPath);
   try {
+    const branchName = `pr-${prNumber}`;
+    await git.fetch("origin", `pull/${prNumber}/head:${branchName}`);
+    await git.checkout(branchName);
+  } catch (error: unknown) {
+    throw new Error(`Failed to checkout PR ${prNumber}: ${error}`);
+  }
+}
+
+export async function isGitRepo(dirPath: string): Promise<boolean> {
+  try {
+    if (!fs.existsSync(dirPath)) {
+      return false;
+    }
+    const git: SimpleGit = simpleGit(dirPath);
     return await git.checkIsRepo();
   } catch {
     return false;
   }
 }
 
-/**
- * Create a new branch and switch to it
- */
 export async function createBranch(repoPath: string, branchName: string): Promise<void> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
@@ -73,9 +81,6 @@ export async function createBranch(repoPath: string, branchName: string): Promis
   }
 }
 
-/**
- * Stage and commit changes (all or specific files)
- */
 export async function commitChanges(repoPath: string, message: string, files: string[] = ["."]): Promise<void> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
@@ -88,9 +93,6 @@ export async function commitChanges(repoPath: string, message: string, files: st
   }
 }
 
-/**
- * Get a list of files that have been modified or added
- */
 export async function getModifiedFiles(repoPath: string): Promise<string[]> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
@@ -106,9 +108,6 @@ export async function getModifiedFiles(repoPath: string): Promise<string[]> {
   }
 }
 
-/**
- * Get the actual diff of changes made in the repository
- */
 export async function getDiff(repoPath: string): Promise<string> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
@@ -126,9 +125,6 @@ export async function getDiff(repoPath: string): Promise<string> {
   }
 }
 
-/**
- * Get a high-level stat summary of changes
- */
 export async function getDiffStat(repoPath: string): Promise<string> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
@@ -142,9 +138,6 @@ export async function getDiffStat(repoPath: string): Promise<string> {
   }
 }
 
-/**
- * Update the URL for a remote
- */
 export async function setRemoteUrl(repoPath: string, remoteName: string, newUrl: string): Promise<void> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
@@ -154,13 +147,9 @@ export async function setRemoteUrl(repoPath: string, remoteName: string, newUrl:
   }
 }
 
-/**
- * Push the current branch to remote
- */
 export async function pushBranch(repoPath: string, branchName: string): Promise<void> {
   const git: SimpleGit = simpleGit(repoPath);
   try {
-    // Check if remote exists
     const remotes = await git.getRemotes();
     if (remotes.length === 0) {
       throw new Error("No remote found to push to.");
@@ -172,9 +161,6 @@ export async function pushBranch(repoPath: string, branchName: string): Promise<
   }
 }
 
-/**
- * Get the default branch name (main or master)
- */
 export async function getDefaultBranch(repoPath: string): Promise<string> {
   const git: SimpleGit = simpleGit(repoPath);
   const branches = await git.branch();

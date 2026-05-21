@@ -1,44 +1,45 @@
 // Sandbox Manager - Orchestrates Nixpacks -> Docker flow
 import { getBuildPlan, generateDockerfile } from "./nixpacks.js";
 import { buildImage, runInContainer, removeImage } from "./docker.js";
+import { logger } from "../utils/logger.js";
+import { execa } from "execa";
 
 export interface SandboxConfig {
   repoPath: string;
   imageTag: string;
+  isLocal?: boolean;
 }
 
 export interface SandboxState {
   imageTag: string;
   isBuilt: boolean;
   containerId?: string;
+  isLocal: boolean;
 }
 
-/**
- * Orchestrate the full sandbox flow:
- * 1. Run nixpacks plan to detect environment
- * 2. Generate Dockerfile
- * 3. Build Docker image
- * 4. Ready for command execution
- */
 export class SandboxManager {
   private config: SandboxConfig;
   private state: SandboxState;
 
-  constructor(repoPath: string, imageTag: string = "pr-fixer-sandbox:latest") {
+  constructor(repoPath: string, imageTag: string = "repatch-sandbox:latest", isLocal = false) {
     this.config = {
       repoPath,
-      imageTag
+      imageTag,
+      isLocal
     };
     this.state = {
       imageTag,
-      isBuilt: false
+      isBuilt: isLocal, // If local, we consider it "built" (ready) immediately
+      isLocal
     };
   }
 
-  /**
-   * Build the sandbox environment
-   */
   async build(): Promise<void> {
+    if (this.config.isLocal) {
+      logger.info("Local execution enabled. Skipping Docker build.");
+      return;
+    }
+
     console.log(`   Detecting environment...`);
     const plan = await getBuildPlan(this.config.repoPath);
     console.log(`   Builder: ${plan.builder}, Language: ${plan.language}`);
@@ -52,20 +53,43 @@ export class SandboxManager {
     this.state.isBuilt = true;
   }
 
-  /**
-   * Run a command in the sandbox
-   */
   async run(cmd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    if (!this.state.isBuilt) {
+    if (!this.state.isBuilt && !this.state.isLocal) {
       throw new Error("Sandbox not built. Call build() first.");
     }
 
-    return runInContainer(this.config.imageTag, cmd);
+    if (this.state.isLocal) {
+      logger.debug(`Running locally: ${cmd}`);
+      try {
+        // Use powershell on Windows for shell commands if 'sh' is missing
+        const shell = process.platform === "win32" ? "powershell.exe" : "sh";
+        const shellArgs = process.platform === "win32" ? ["-Command", cmd] : ["-c", cmd];
+
+        const { stdout, stderr, exitCode } = await execa(shell, shellArgs, {
+          cwd: this.config.repoPath,
+          reject: false,
+          env: {
+            ...process.env,
+            CI: "true"
+          }
+        });
+        return {
+          stdout: stdout || "",
+          stderr: stderr || "",
+          exitCode: exitCode ?? 0
+        };
+      } catch (error: any) {
+        return {
+          stdout: "",
+          stderr: error.message,
+          exitCode: 1
+        };
+      }
+    }
+
+    return runInContainer(this.config.imageTag, cmd, this.config.repoPath);
   }
 
-  /**
-   * Cleanup resources
-   */
   async cleanup(): Promise<void> {
     await removeImage(this.config.imageTag);
     this.state.isBuilt = false;
@@ -80,9 +104,6 @@ export class SandboxManager {
   }
 }
 
-/**
- * Convenience function to create and build a sandbox
- */
 export async function createSandbox(repoPath: string): Promise<SandboxManager> {
   const manager = new SandboxManager(repoPath);
   await manager.build();

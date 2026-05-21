@@ -1,9 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-/**
- * Detect the auto-formatter command for a given repository
- */
 export function detectFormatCommand(repoPath: string): string | null {
   const packageJsonPath = path.join(repoPath, "package.json");
   if (fs.existsSync(packageJsonPath)) {
@@ -33,9 +30,6 @@ export function detectFormatCommand(repoPath: string): string | null {
   return null;
 }
 
-/**
- * Detect the linter or formatter command for a given repository
- */
 export function detectLintCommand(repoPath: string): string | null {
   // 1. Check package.json for scripts
   const packageJsonPath = path.join(repoPath, "package.json");

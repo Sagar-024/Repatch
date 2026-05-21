@@ -7,16 +7,24 @@ interface GitHubIssue {
   state: string;
 }
 
-interface GitHubPR {
+export interface GitHubPR {
   html_url: string;
   number: number;
   title: string;
   body: string;
+  state: string;
+  head: {
+    ref: string;
+    repo: {
+      html_url: string;
+      full_name: string;
+    }
+  };
+  base: {
+    ref: string;
+  };
 }
 
-/**
- * Fetch an issue from GitHub
- */
 export async function fetchIssue(repoUrl: string, issueNumber: number): Promise<GitHubIssue> {
   const token = process.env.GH_TOKEN;
   const { owner, repo } = parseRepoUrl(repoUrl);
@@ -38,9 +46,48 @@ export async function fetchIssue(repoUrl: string, issueNumber: number): Promise<
   return response.json() as Promise<GitHubIssue>;
 }
 
-/**
- * Fork a repository to the authenticated user's account
- */
+export async function getPullRequest(repoUrl: string, prNumber: number): Promise<GitHubPR> {
+  const token = process.env.GH_TOKEN;
+  const { owner, repo } = parseRepoUrl(repoUrl);
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+    {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        Accept: "application/vnd.github.v3+json"
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PR: ${response.statusText}`);
+  }
+
+  return response.json() as Promise<GitHubPR>;
+}
+
+export async function getPullRequestDiff(repoUrl: string, prNumber: number): Promise<string> {
+  const token = process.env.GH_TOKEN;
+  const { owner, repo } = parseRepoUrl(repoUrl);
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+    {
+      headers: {
+        Authorization: token ? `Bearer ${token}` : "",
+        Accept: "application/vnd.github.v3.diff"
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PR diff: ${response.statusText}`);
+  }
+
+  return response.text();
+}
+
 export async function forkRepository(repoUrl: string): Promise<{ owner: string; repo: string; html_url: string }> {
   const token = process.env.GH_TOKEN;
   const { owner, repo } = parseRepoUrl(repoUrl);
@@ -70,9 +117,6 @@ export async function forkRepository(repoUrl: string): Promise<{ owner: string; 
   };
 }
 
-/**
- * Get authenticated user's login
- */
 export async function getAuthenticatedUser(): Promise<string> {
   const token = process.env.GH_TOKEN;
   const response = await fetch("https://api.github.com/user", {
@@ -90,9 +134,6 @@ export async function getAuthenticatedUser(): Promise<string> {
   return data.login;
 }
 
-/**
- * Create a pull request
- */
 export async function createPullRequest(
   repoUrl: string,
   branch: string,
@@ -129,10 +170,7 @@ export async function createPullRequest(
   return response.json() as Promise<GitHubPR>;
 }
 
-/**
- * Parse a GitHub URL to get owner and repo
- */
-function parseRepoUrl(url: string): { owner: string; repo: string } {
+export function parseRepoUrl(url: string): { owner: string; repo: string } {
   // HTTPS: https://github.com/owner/repo
   // SSH: git@github.com:owner/repo.git
   let match = url.match(/github\.com[\/:]([^\/]+)\/([^\/]+)/);
@@ -147,9 +185,6 @@ function parseRepoUrl(url: string): { owner: string; repo: string } {
   };
 }
 
-/**
- * Check if GitHub token is available
- */
 export function hasGitHubToken(): boolean {
   return !!process.env.GH_TOKEN;
 }

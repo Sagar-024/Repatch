@@ -9,7 +9,7 @@ export class ReproduceStep implements BaseStep {
 
   async execute(state: AgentState): Promise<StepResult> {
     const provider = createProvider({ model: this.deps.model });
-    const tools = getToolsForLLM();
+    const tools = await getToolsForLLM();
     const toolContext = { repoPath: state.repoPath };
 
     const systemPrompt = `You are reproducing the bug in a local sandbox.
@@ -60,12 +60,22 @@ Respond with JSON tool calls. The text content before the tool calls will be tre
         break;
       }
 
+      messages.push({
+        role: "assistant" as const,
+        content: response.content || "",
+        toolCalls: response.toolCalls
+      });
+
       for (const toolCall of response.toolCalls) {
         console.log(`   🔧 ${toolCall.name}`);
         const result = await this.deps.executeTool(toolCall, state);
 
-        messages.push({ role: "assistant" as const, content: `[Called ${toolCall.name}]` });
-        messages.push({ role: "user" as const, content: `Result: ${JSON.stringify(result).slice(0, 500)}` });
+        messages.push({
+          role: "tool" as const,
+          name: toolCall.name,
+          toolCallId: toolCall.id,
+          content: JSON.stringify(result)
+        });
 
         if (toolCall.name === "run_command") {
           state.reproductionTest = toolCall.arguments.cmd as string;

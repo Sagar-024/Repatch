@@ -37,9 +37,6 @@ export class PersistenceMiddleware {
     }
   }
 
-  /**
-   * Loads the state from disk if it exists.
-   */
   load(): AgentState | null {
     if (fs.existsSync(this.checkpointFile)) {
       try {

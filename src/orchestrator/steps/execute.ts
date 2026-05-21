@@ -18,9 +18,7 @@ export class ExecuteStep implements BaseStep {
     }
   }
 
-  /**
-   * Fuzzy Surgical Matching: Match code by intent (ignoring whitespace/semicolons)
-   */
+  // Normalize and compare ignoring whitespace/semicolons
   private fuzzyReplace(content: string, oldSnippet: string, newSnippet: string): string | null {
     const normalize = (s: string) => s.replace(/[\s;]/g, "");
     const normalizedOld = normalize(oldSnippet);
@@ -46,8 +44,9 @@ export class ExecuteStep implements BaseStep {
   }
 
   async execute(state: AgentState): Promise<StepResult> {
-    const provider = createProvider({ model: this.deps.model, temperature: 0 });
-    const tools = getToolsForLLM().filter(t => ["edit_file", "write_file", "run_command"].includes(t.name));
+    const provider = createProvider({ model: this.deps.model });
+    const allTools = await getToolsForLLM();
+    const tools = allTools.filter(t => ["edit_file", "write_file", "run_command"].includes(t.name));
 
     const planEntry = state.history.find(h => h.step === "PLAN");
     
@@ -108,6 +107,12 @@ Apply the fix to the relevant file(s) NOW using 'edit_file'. Respond with JSON t
         break;
       }
 
+      messages.push({
+        role: "assistant" as const,
+        content: response.content || "",
+        toolCalls: response.toolCalls
+      });
+
       for (const toolCall of response.toolCalls) {
         console.log(`   🔧 ${toolCall.name}`);
         
@@ -149,8 +154,12 @@ Apply the fix to the relevant file(s) NOW using 'edit_file'. Respond with JSON t
           state.errorLogs.push(`Execution tool failed (${toolCall.name}): ${errorMsg}`);
         }
 
-        messages.push({ role: "assistant" as const, content: `[Called ${toolCall.name}]` });
-        messages.push({ role: "user" as const, content: `Result: ${JSON.stringify(result).slice(0, 500)}` });
+        messages.push({
+          role: "tool" as const,
+          name: toolCall.name,
+          toolCallId: toolCall.id,
+          content: JSON.stringify(result)
+        });
 
         if (toolCall.name === "edit_file" || toolCall.name === "write_file") {
           if (result && (result.success || result.path)) {

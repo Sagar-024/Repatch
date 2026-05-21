@@ -1,10 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-/**
- * Generates a compressed file tree string for the repository.
- * Skips common ignored directories.
- */
 export function generateFileTree(dir: string, depth = 0, maxDepth = 4): string {
   if (depth > maxDepth) return "";
   

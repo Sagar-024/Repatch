@@ -11,10 +11,6 @@ export interface NixpacksPlan {
   pkgs?: string[];
 }
 
-/**
- * Run nixpacks plan to detect the language and build environment
- * Returns a JSON summary of the detected environment
- */
 export async function getBuildPlan(repoPath: string): Promise<NixpacksPlan> {
   // First check if nixpacks is available
   const available = await isNixpacksAvailable();
@@ -57,9 +53,6 @@ export async function getBuildPlan(repoPath: string): Promise<NixpacksPlan> {
   }
 }
 
-/**
- * Fallback detection when nixpacks is not available
- */
 function detectFallback(repoPath: string): NixpacksPlan {
   // Check for package.json
   const packageJsonPath = path.join(repoPath, "package.json");
@@ -97,6 +90,66 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
+  // Check for Cargo.toml (Rust)
+  const cargoPath = path.join(repoPath, "Cargo.toml");
+  if (fs.existsSync(cargoPath)) {
+    return {
+      builder: "rust",
+      language: "rust",
+      version: "latest",
+      installCmd: ["cargo build"],
+      startCmd: ["cargo test"]
+    };
+  }
+
+  // Check for pom.xml (Java Maven)
+  const pomPath = path.join(repoPath, "pom.xml");
+  if (fs.existsSync(pomPath)) {
+    return {
+      builder: "java",
+      language: "java",
+      version: "latest",
+      installCmd: ["mvn install -DskipTests"],
+      startCmd: ["mvn test"]
+    };
+  }
+
+  // Check for build.gradle (Java Gradle)
+  const gradlePath = path.join(repoPath, "build.gradle");
+  if (fs.existsSync(gradlePath)) {
+    return {
+      builder: "java",
+      language: "java",
+      version: "latest",
+      installCmd: ["gradle build -x test"],
+      startCmd: ["gradle test"]
+    };
+  }
+
+  // Check for Gemfile (Ruby)
+  const gemfilePath = path.join(repoPath, "Gemfile");
+  if (fs.existsSync(gemfilePath)) {
+    return {
+      builder: "ruby",
+      language: "ruby",
+      version: "latest",
+      installCmd: ["bundle install"],
+      startCmd: ["bundle exec rspec"]
+    };
+  }
+
+  // Check for composer.json (PHP)
+  const composerPath = path.join(repoPath, "composer.json");
+  if (fs.existsSync(composerPath)) {
+    return {
+      builder: "php",
+      language: "php",
+      version: "latest",
+      installCmd: ["composer install"],
+      startCmd: ["./vendor/bin/phpunit"]
+    };
+  }
+
   // Default fallback
   return {
     builder: "node",
@@ -107,10 +160,6 @@ function detectFallback(repoPath: string): NixpacksPlan {
   };
 }
 
-/**
- * Generate a Dockerfile from the nixpacks build
- * Returns the Dockerfile content
- */
 export async function generateDockerfile(repoPath: string): Promise<string> {
   try {
     // Use nixpacks to generate a Dockerfile
@@ -129,9 +178,6 @@ export async function generateDockerfile(repoPath: string): Promise<string> {
   }
 }
 
-/**
- * Fallback Dockerfile for when nixpacks can't detect the environment
- */
 function fallbackDockerfile(): string {
   return `FROM node:20-slim
 WORKDIR /app
@@ -141,9 +187,6 @@ COPY . .
 CMD ["npm", "test"]`;
 }
 
-/**
- * Check if nixpacks is available on the system
- */
 export async function isNixpacksAvailable(): Promise<boolean> {
   try {
     await execa("nixpacks", ["--version"]);

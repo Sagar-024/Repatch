@@ -2,6 +2,8 @@ import { execa, ExecaError } from "execa";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { config } from "../config/loader.js";
+import { logger } from "../utils/logger.js";
 
 export interface CommandResult {
   stdout: string;
@@ -9,9 +11,6 @@ export interface CommandResult {
   exitCode: number;
 }
 
-/**
- * Build a Docker image from a Dockerfile
- */
 export async function buildImage(dockerfileContent: string, tag: string): Promise<void> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pr-fixer-docker-"));
 
@@ -19,20 +18,26 @@ export async function buildImage(dockerfileContent: string, tag: string): Promis
     const dockerfilePath = path.join(tmpDir, "Dockerfile");
     fs.writeFileSync(dockerfilePath, dockerfileContent);
 
-    console.log(`   Building Docker image: ${tag}`);
+    logger.debug(`Building Docker image: ${tag}`);
 
-    // Build using docker build command
-    const { stdout } = await execa("docker", ["build", "-t", tag, "."], {
+    const { stdout, stderr, exitCode } = await execa("docker", ["build", "-t", tag, "."], {
       cwd: tmpDir,
       reject: false
     });
 
-    console.log(stdout);
-    console.log(`   ✅ Image built successfully`);
+    if (exitCode !== 0) {
+      if (stderr.includes("connection refused") || stderr.includes("daemon is not running") || stderr.includes("cannot find the file specified")) {
+         throw new Error("Docker not running. Start Docker Desktop or the docker daemon.");
+      }
+      throw new Error(`Docker build failed with exit code ${exitCode}: ${stderr || stdout}`);
+    }
+
+    logger.debug(stdout);
+    logger.debug(`Image built successfully: ${tag}`);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    if (errorMessage.includes("connection refused") || errorMessage.includes("ENOENT")) {
+    if (errorMessage.includes("connection refused") || errorMessage.includes("ENOENT") || errorMessage.includes("daemon is not running")) {
       throw new Error("Docker not running. Start Docker Desktop or the docker daemon.");
     }
 
@@ -42,9 +47,6 @@ export async function buildImage(dockerfileContent: string, tag: string): Promis
   }
 }
 
-/**
- * Run a command inside a container
- */
 export async function runInContainer(imageTag: string, cmd: string, repoPath?: string): Promise<CommandResult> {
   try {
     // Pull image first if needed
@@ -57,10 +59,19 @@ export async function runInContainer(imageTag: string, cmd: string, repoPath?: s
     const args = [
       "run",
       "--rm",
-      "--network", "none",  // Security: no network
-      "--memory", "2g",      // Limit memory
-      "--cpus", "1",       // Limit CPU
     ];
+
+    if (!config.sandbox.network) {
+      args.push("--network", "none");
+    }
+
+    if (config.sandbox.memory) {
+      args.push("--memory", config.sandbox.memory);
+    }
+
+    if (config.sandbox.cpus) {
+      args.push("--cpus", config.sandbox.cpus.toString());
+    }
 
     if (repoPath) {
       // Mount the repo path to /app in the container
@@ -70,10 +81,16 @@ export async function runInContainer(imageTag: string, cmd: string, repoPath?: s
 
     args.push(imageTag, "sh", "-c", cmd);
 
+    logger.debug(`Running in container: ${cmd}`);
+
     // Run container with docker run
     const { stdout, stderr, exitCode } = await execa("docker", args, {
       reject: false
     });
+
+    if (exitCode !== 0 && (stderr.includes("connection refused") || stderr.includes("daemon is not running") || stderr.includes("cannot find the file specified"))) {
+       throw new Error(`Docker connection failed: ${stderr}`);
+    }
 
     return {
       stdout: stdout || "",
@@ -84,8 +101,8 @@ export async function runInContainer(imageTag: string, cmd: string, repoPath?: s
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Fallback to local execution if Docker is not available
-    if (errorMessage.includes("connection refused") || errorMessage.includes("ENOENT") || errorMessage.includes("cannot find the file specified")) {
-      console.warn(`   ⚠️ Docker not available, falling back to local execution for: ${cmd}`);
+    if (errorMessage.includes("connection refused") || errorMessage.includes("ENOENT") || errorMessage.includes("cannot find the file specified") || errorMessage.includes("daemon is not running")) {
+      logger.warn(`Docker not available, falling back to local execution for: ${cmd}`);
       try {
         const { stdout, stderr, exitCode } = await execa("sh", ["-c", cmd], {
           cwd: repoPath,
@@ -98,15 +115,23 @@ export async function runInContainer(imageTag: string, cmd: string, repoPath?: s
         };
       } catch (localError) {
         // If sh -c fails (e.g. on Windows without sh), try running the command directly
-        const { stdout, stderr, exitCode } = await execa(cmd.split(" ")[0], cmd.split(" ").slice(1), {
-          cwd: repoPath,
-          reject: false
-        });
-        return {
-           stdout: stdout || "",
-           stderr: stderr || "",
-           exitCode: exitCode ?? 0
-        };
+        try {
+          const { stdout, stderr, exitCode } = await execa(cmd.split(" ")[0], cmd.split(" ").slice(1), {
+            cwd: repoPath,
+            reject: false
+          });
+          return {
+             stdout: stdout || "",
+             stderr: stderr || "",
+             exitCode: exitCode ?? 0
+          };
+        } catch (finalError) {
+          return {
+            stdout: "",
+            stderr: String(finalError),
+            exitCode: 1
+          };
+        }
       }
     }
 
@@ -119,13 +144,14 @@ export async function runInContainer(imageTag: string, cmd: string, repoPath?: s
       };
     }
 
-    throw new Error(`Container execution failed: ${errorMessage}`);
+    return {
+      stdout: "",
+      stderr: errorMessage,
+      exitCode: 1
+    };
   }
 }
 
-/**
- * Check if Docker is available
- */
 export async function isDockerAvailable(): Promise<boolean> {
   try {
     await execa("docker", ["info"], { reject: false });
@@ -135,9 +161,6 @@ export async function isDockerAvailable(): Promise<boolean> {
   }
 }
 
-/**
- * Remove a Docker image
- */
 export async function removeImage(tag: string): Promise<void> {
   try {
     await execa("docker", ["rmi", "-f", tag], { reject: false });
@@ -146,9 +169,6 @@ export async function removeImage(tag: string): Promise<void> {
   }
 }
 
-/**
- * Pull an image
- */
 export async function pullImage(imageTag: string): Promise<void> {
   await execa("docker", ["pull", imageTag]);
 }

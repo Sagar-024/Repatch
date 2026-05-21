@@ -10,7 +10,7 @@ export class ExploreStep implements BaseStep {
 
   async execute(state: AgentState): Promise<StepResult> {
     const provider = createProvider({ model: this.deps.model });
-    const tools = getToolsForLLM();
+    const tools = await getToolsForLLM();
 
     // Get initial understanding from history
     const understandEntry = state.history.find(h => h.step === "UNDERSTAND");
@@ -66,6 +66,13 @@ Respond with JSON tool calls. The text content before the tool calls will be tre
         break; // Exit if we have files and model is done
       }
 
+      // Push assistant tool call message to history
+      messages.push({
+        role: "assistant" as const,
+        content: response.content || "",
+        toolCalls: response.toolCalls
+      });
+
       // E4: Parallel Tool Batching
       console.log(`   🔧 Batching ${response.toolCalls.length} tool calls...`);
       const results = await Promise.all(
@@ -77,8 +84,12 @@ Respond with JSON tool calls. The text content before the tool calls will be tre
       );
 
       for (const { toolCall, result } of results) {
-        messages.push({ role: "assistant" as const, content: `[Called ${toolCall.name}]` });
-        messages.push({ role: "user" as const, content: `Result: ${JSON.stringify(result).slice(0, 500)}` });
+        messages.push({
+          role: "tool" as const,
+          name: toolCall.name,
+          toolCallId: toolCall.id,
+          content: JSON.stringify(result)
+        });
       }
 
       response = await provider.complete(messages, tools);

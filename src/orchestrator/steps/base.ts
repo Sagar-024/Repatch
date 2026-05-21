@@ -9,6 +9,7 @@ export interface StepResult {
 export interface StepDependencies {
   model: string;
   maxIterations: number;
+  isLocal?: boolean;
   executeTool(toolCall: ToolCall, state: AgentState): Promise<unknown>;
 }
 

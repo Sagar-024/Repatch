@@ -7,10 +7,6 @@ export interface ValidationResult {
   errors: string[];
 }
 
-/**
- * Validate tool call arguments against a schema
- * This is a simplified validation without Zod
- */
 export function validateToolCall(
   toolCall: ToolCall,
   schema: ToolSchema
@@ -64,9 +60,6 @@ export interface ToolSchema {
   required?: string[];
 }
 
-/**
- * Validate and sanitize tool call arguments
- */
 export function sanitizeToolCall(
   toolCall: ToolCall,
   schema: ToolSchema
@@ -93,9 +86,6 @@ export function sanitizeToolCall(
   };
 }
 
-/**
- * Correction prompt for invalid tool calls
- */
 export function generateCorrectionPrompt(
   toolCall: ToolCall,
   errors: string[]
