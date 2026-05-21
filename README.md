@@ -1,87 +1,192 @@
-# Repatch | Autonomous Engineering Agent
+# Repatch
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Docker](https://img.shields.io/badge/Sandboxing-Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+An autonomous bug-fixing agent that takes a GitHub issue, reproduces the bug, plans a fix, applies it, verifies it works, and opens a PR — all without human intervention.
 
-Repatch is an autonomous, test-driven engineering agent designed to handle the entire bug-fixing lifecycle with zero human intervention. Unlike standard LLM assistants, Repatch is grounded by an **Inviolable Loop** of empirical verification, ensuring that every patch is not just generated, but proven correct in a sandboxed environment.
+Built as a learning project to explore agent architecture, LLM tool-calling, and sandboxed execution. Active development — contributions and feedback welcome.
 
 ---
 
-##  Core Pillars
+## What It Does
 
-### 1. The Inviolable Loop (Empirical TDD)
-Repatch operates on a strict state machine that mandates reproduction before implementation. 
-- **Reproduction-First**: The agent is physically unable to modify source code until it has authored a test case that fails against the current HEAD.
-- **Surgical Execution**: High-precision `edit_file` operations minimize diff noise.
-- **Verification Guarantee**: Every submission includes raw logs of the reproduction failure and the subsequent verification success.
+Give it a repo URL and an issue description. It will:
 
-### 2. Semantic Path Grounding (Map of Truth)
-To eliminate the "hallucinated paths" common in autonomous agents, Repatch builds a **Semantic Index** of the repository upon initialization. This "Map of Truth" ensures the agent's internal monologue is always grounded in the actual file system structure.
+1. **Understand** — Parse the issue and build context about the codebase
+2. **Explore** — Use LLM-guided tool calls to find relevant files
+3. **Reproduce** — Generate a failing test that proves the bug exists
+4. **Plan** — Design a surgical fix based on the reproduction
+5. **Execute** — Apply the fix using fuzzy code matching
+6. **Verify** — Run tests + linters in a sandbox to confirm the fix works
+7. **Submit** — Open a PR with the fix and an engineering narrative
 
-### 3. Factual Narratives (Zero-Hallucination PRs)
-Repatch generates PR descriptions based exclusively on the **Actual Git Diff**, not the initial plan.
-- **Diff-Grounding**: The agent analyzes the final code changes post-execution to write factual engineering narratives.
-- **Plan Divergence Tracking**: If the implementation diverged from the plan (e.g., "Simplified approach to fix critical import error"), it is explicitly noted.
-
-### 4. Deterministic Sandboxing
-Leveraging **Nixpacks** and **Docker**, Repatch automatically detects the project's runtime (Node, Python, Go, etc.) and spawns an ephemeral, OCI-compliant container for isolated test execution and linting.
+If any step fails, it backtracks (e.g., VERIFY → PLAN if tests still fail) and tries again.
 
 ---
 
-##  Technical Architecture
+## Architecture
 
-```mermaid
-graph TD
-    A[Issue Report] --> B[UNDERSTAND: Structural Analysis]
-    B --> C[EXPLORE: Semantic Path Mapping]
-    C --> D[REPRODUCE: Authors Failing Test]
-    D --> E[PLAN: Surgical Patch Design]
-    E --> F[EXECUTE: Intent-Based Code Modification]
-    F --> G[VERIFY: Multi-Stage Validation]
-    G --> H[SUBMIT: Diff-Grounded PR Creation]
-    G -- Fails --> E
+```
+Orchestrator (State Machine)
+  ├── Steps: UNDERSTAND → EXPLORE → REPRODUCE → PLAN → EXECUTE → VERIFY → SUBMIT
+  ├── Middleware: Persistence (checkpoint saves)
+  └── Tool Library: list_files, read_file, grep_search, edit_file, write_file, run_command, create_reproduction_test
+
+Inference Layer
+  ├── OpenAI (GPT-4o, DeepSeek)
+  ├── Anthropic (Claude 3.5 Sonnet)
+  ├── Google Gemini (native API + CLI fallback)
+  └── Mimo (Gitlawb OpenGateway)
+
+Sandbox Layer
+  ├── Nixpacks (language detection)
+  ├── Docker (isolated execution)
+  └── Local fallback (when Docker unavailable)
 ```
 
-- **Orchestration**: Decoupled Step Pattern (Strategy Pattern) for robust state transitions.
-- **Inference Layer**: Provider-agnostic wrapper supporting OpenAI, Anthropic, and Gemini.
-- **Fuzzy Matching**: Custom sliding-window algorithm for surgical code edits that resist minor whitespace/indentation shifts.
-- **Persistence Middleware**: Checkpoint-based state management for long-running autonomous tasks.
+Key design decisions:
+- **Strategy Pattern** for steps — each step is a self-contained class with its own LLM prompt and tool subset
+- **Map of Truth** — file tree generated upfront to ground the LLM and prevent path hallucinations
+- **Fuzzy Surgical Matching** — if the LLM's edit snippet doesn't exactly match, a normalized sliding window search tries to find the intended location
+- **Path Traversal Protection** — write operations are validated to stay within the repo directory
 
 ---
 
-##  Getting Started
+## Supported Languages (Sandbox Detection)
+
+Auto-detected via Nixpacks or fallback heuristics:
+
+| Language | Detection File |
+|----------|---------------|
+| Node.js  | package.json  |
+| Python   | requirements.txt, pyproject.toml, setup.py |
+| Go       | go.mod        |
+| Rust     | Cargo.toml    |
+| Java     | pom.xml, build.gradle |
+| Ruby     | Gemfile       |
+| PHP      | composer.json |
+
+---
+
+## Installation
 
 ### Prerequisites
-- **Node.js 20+**
-- **Docker Desktop** (Daemon must be running)
-- **GH_TOKEN** (Exported in your environment for PR submission)
+- Node.js 20+
+- Docker Desktop (optional — local fallback available)
+- Git
 
-### Installation
+### Install
 ```bash
 git clone https://github.com/Sagar-024/Repatch.git
 cd Repatch
 npm install
 npm run build
+npm install -g .
 ```
-
-### Usage
-Repatch is designed with a **Reproduction-First** UX to build trust.
-
-#### 1. Reproduce the bug (Safe, Read-Only)
-Generate a verifiable reproduction test in a sandbox without touching your source code.
-```bash
-npm run dev -- reproduce <repo-url> -i "Issue description"
-```
-
-#### 2. Fix the bug (Autonomous patching)
-Run the full loop to reproduce, fix, and open a PR (with an interactive review gate).
-```bash
-npm run dev -- fix <repo-url> -i "Issue description"
-```
-
 
 ---
 
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Configuration
+
+### Interactive Setup
+```bash
+repatch configure
+```
+
+### Manual — `.repatch.yaml`
+```yaml
+model: "gpt-4o"  # Options: gpt-4o, claude-3-5-sonnet-latest, gemini-1.5-pro, mimo-v2.5-pro
+openai:
+  apiKey: "sk-..."
+  baseUrl: "https://api.openai.com/v1"
+anthropic:
+  apiKey: "sk-ant-..."
+gemini:
+  apiKey: "AIzaSy..."
+mimo:
+  apiKey: "ogw_..."
+  baseUrl: "https://opengateway.gitlawb.com/v1"
+github:
+  token: "ghp_..."
+sandbox:
+  memory: "4g"
+  cpus: 2
+  network: false
+```
+
+### Environment Variables
+`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `MIMO_API_KEY`, `GH_TOKEN`, `AI_MODEL`
+
+---
+
+## Usage
+
+### Check Environment
+```bash
+repatch check
+```
+
+### Reproduce a Bug (Read-Only)
+```bash
+repatch reproduce <repo-url> -i "Issue description"
+```
+
+### Fix a Bug (Full Loop)
+```bash
+# From a description
+repatch fix <repo-url> -i "The login form returns 500 on empty email"
+
+# From a GitHub issue
+repatch fix <repo-url> -i "https://github.com/owner/repo/issues/42"
+
+# With a hint
+repatch fix <repo-url> -i "Issue description" -h "Check the auth middleware"
+
+# Local execution (skip Docker)
+repatch fix <repo-url> -i "Issue description" --local
+```
+
+### Analyze/Fix a Pull Request
+```bash
+repatch pr <pr-url>           # Analysis only
+repatch pr <pr-url> --fix     # Analyze and fix
+```
+
+### Explore a Codebase
+```bash
+repatch explore .                          # Summary of the project
+repatch explore . -q "How does auth work?" # Specific question
+repatch explore . -i                       # Interactive REPL
+```
+
+---
+
+## Testing
+
+```bash
+npm test                    # Run all tests
+npm run test:watch          # Watch mode
+npm run test:coverage       # With coverage report
+```
+
+---
+
+## Known Limitations
+
+- **No cost tracking** — LLM calls have no token budget or spend monitoring
+- **Checkpoint resume not implemented** — persistence saves state but doesn't support resuming a crashed run
+- **Gemini CLI tool parsing** — uses multi-strategy parsing (code blocks → full JSON → regex) but may still struggle with deeply nested tool arguments
+- **Sandbox is per-run** — no shared container pool or caching between runs
+- **Language detection** — fallback heuristics cover 8 languages but Nixpacks (when installed) handles more
+
+---
+
+## Project Status
+
+Active development. The core loop (understand → explore → reproduce → plan → execute → verify → submit) works. The project is being iterated on to improve reliability, add more language support, and harden edge cases.
+
+Built by [Sagar Kharal](https://github.com/Sagar-024) — MERN stack developer exploring AI agent architecture.
+
+---
+
+## License
+
+MIT
