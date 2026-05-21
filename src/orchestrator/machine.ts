@@ -1,13 +1,11 @@
-// State machine - Epic 3: The Inviolable Loop
-// Decoupled Step Pattern (Strategy Pattern)
 
 import { AgentState, Step, HistoryEntry, createInitialState } from "./state.js";
 import { getDefaultModel, ToolCall } from "../inference/provider.js";
 import { getTool } from "../tools/registry.js";
+import { logger } from "../utils/logger.js";
 import * as fs from "fs";
 import * as path from "path";
 
-// Step Imports
 import { BaseStep, StepDependencies } from "./steps/base.js";
 import { UnderstandStep } from "./steps/understand.js";
 import { ExploreStep } from "./steps/explore.js";
@@ -17,7 +15,6 @@ import { ExecuteStep } from "./steps/execute.js";
 import { VerifyStep } from "./steps/verify.js";
 import { SubmitStep } from "./steps/submit.js";
 
-// Middleware
 import { PersistenceMiddleware } from "./middleware/persistence.js";
 
 export interface StateMachine {
@@ -28,10 +25,12 @@ export class Orchestrator implements StateMachine {
   private model: string;
   private maxIterationsPerStep: number;
   private persistence?: PersistenceMiddleware;
+  private isLocal: boolean;
 
-  constructor(model?: string, maxIterationsPerStep = 5) {
+  constructor(model?: string, options: { maxIterationsPerStep?: number; isLocal?: boolean } = {}) {
     this.model = model || getDefaultModel();
-    this.maxIterationsPerStep = maxIterationsPerStep;
+    this.maxIterationsPerStep = options.maxIterationsPerStep || 5;
+    this.isLocal = options.isLocal || false;
   }
 
   private initPersistence(repoPath: string) {
@@ -44,6 +43,7 @@ export class Orchestrator implements StateMachine {
     const deps: StepDependencies = {
       model: this.model,
       maxIterations: this.maxIterationsPerStep,
+      isLocal: this.isLocal,
       executeTool: (toolCall, state) => this.executeTool(toolCall, { repoPath: state.repoPath }, state)
     };
 
@@ -62,7 +62,7 @@ export class Orchestrator implements StateMachine {
   async transition(state: AgentState): Promise<AgentState> {
     this.initPersistence(state.repoPath);
     const stepName = state.currentStep;
-    console.log(`\n📍 Step: ${stepName}`);
+    logger.info(`Step: ${stepName}`);
     
     try {
       const step = this.getStep(stepName);
@@ -70,14 +70,13 @@ export class Orchestrator implements StateMachine {
       state = result.state;
       state.currentStep = result.nextStep;
 
-      // Auto-save checkpoint
       if (this.persistence) {
         await this.persistence.save(state);
       }
       
       return state;
     } catch (error) {
-      console.error(`   ❌ Error in ${stepName}: ${error}`);
+      logger.fail(`Error in ${stepName}: ${error}`);
       state.errorLogs.push(`Error in ${stepName}: ${error}`);
       return state;
     }
@@ -90,9 +89,8 @@ export class Orchestrator implements StateMachine {
     }
 
     const args: Record<string, unknown> = { ...toolCall.arguments };
-    console.log(`      Args: ${JSON.stringify(args).slice(0, 100)}...`);
+    logger.debug(`Args: ${JSON.stringify(args).slice(0, 100)}...`);
 
-    // Normalize and join paths
     const resolvePath = (p: string): string => {
       if (!p) return p;
       let normalized = p;
@@ -117,6 +115,14 @@ export class Orchestrator implements StateMachine {
     if (toolCall.name === "edit_file" && args.filePath) {
       args.filePath = resolvePath(args.filePath as string);
     }
+
+    if ((toolCall.name === "write_file" || toolCall.name === "edit_file") && args.filePath) {
+      const resolved = path.resolve(args.filePath as string);
+      const repoRoot = path.resolve(context.repoPath);
+      if (!resolved.startsWith(repoRoot + path.sep) && resolved !== repoRoot) {
+        return { error: `Path traversal denied: "${resolved}" is outside the repository directory "${repoRoot}"` };
+      }
+    }
     if (toolCall.name === "create_reproduction_test" && args.dirPath) {
       args.dirPath = resolvePath(args.dirPath as string);
     }
@@ -127,7 +133,6 @@ export class Orchestrator implements StateMachine {
 
 
 
-    // Special case for write_file
     if (toolCall.name === "write_file") {
       return this.handleWriteFile(args);
     }
@@ -135,7 +140,6 @@ export class Orchestrator implements StateMachine {
     try {
       const result = await tool.handler(args);
       
-      // Track visited files
       if (toolCall.name === "read_file" && args.filePath) {
         const fp = args.filePath as string;
         if (!state.visitedFiles.includes(fp)) {
@@ -186,38 +190,30 @@ export class Orchestrator implements StateMachine {
   }
 
   async run(state: AgentState): Promise<AgentState> {
-    console.log(`\n🤖 Starting Autonomous PR Fixer (V1 Decoupled)`);
-    console.log(`   Repo: ${state.repoUrl}`);
-    console.log(`   Issue: ${state.issueText.slice(0, 80)}...\n`);
+    logger.info(`Starting Autonomous PR Fixer`);
+    logger.info(`Repo: ${state.repoUrl}`);
+    logger.info(`Issue: ${state.issueText.slice(0, 80)}...`);
 
-    // Generate Map of Truth
     const { generateFileTree } = await import("./utils.js");
-    console.log(`   🗺️ Generating Map of Truth...`);
+    logger.start(`Generating Map of Truth...`);
     state.fileTree = generateFileTree(state.repoPath);
+    logger.succeed(`Map of Truth generated.`);
 
-    const maxSteps = 20; // Prevent infinite loops
+    const maxSteps = 20;
     let stepCount = 0;
 
-    // The loop continues until a terminal condition or max steps reached.
-    // In this V1 refactor, SUBMIT is the final step, but it transitions to itself or finishes.
-    // We'll use a special condition or just let it run until it stops changing state or reaches SUBMIT and completes.
-    
-    let previousStep: Step | null = null;
-    
     while (stepCount < maxSteps) {
       const currentStepName = state.currentStep;
       state = await this.transition(state);
       stepCount++;
 
-      // If SUBMIT step is completed, we are done.
-      // In SUBMIT.execute, it returns nextStep: "SUBMIT".
-      // We'll check if we've already executed SUBMIT.
+      // SUBMIT transitions to itself when done
       if (currentStepName === "SUBMIT" && state.currentStep === "SUBMIT") {
         break;
       }
       
       if (state.errorLogs.length > 10) {
-        console.error("   ❌ Too many errors, halting.");
+        logger.fail("Too many errors, halting.");
         break;
       }
     }
