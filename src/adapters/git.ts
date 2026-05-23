@@ -2,10 +2,6 @@ import { simpleGit, SimpleGit } from "simple-git";
 import * as path from "path";
 import * as fs from "fs";
 
-/**
- * Clone a GitHub repository (supports HTTPS and SSH URLs)
- * Uses GH_TOKEN from environment if available for authentication
- */
 export async function cloneRepo(url: string, targetDir: string): Promise<void> {
   const git: SimpleGit = simpleGit();
   const ghToken = process.env.GH_TOKEN;
@@ -27,7 +23,7 @@ export async function cloneRepo(url: string, targetDir: string): Promise<void> {
     }
   }
 
-  // If target directory exists and has .git, don't clone (already exists)
+  // skip if already cloned
   if (await isGitRepo(targetDir)) {
     return;
   }

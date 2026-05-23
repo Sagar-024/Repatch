@@ -15,8 +15,8 @@ export interface AgentState {
   issueUrl: string;
   issueText: string;
   repoPath: string;
-  fileTree?: string; // The "Map of Truth"
-  monologue?: string; // The "Internal Monologue"
+  fileTree?: string;
+  monologue?: string;
   visitedFiles: string[];
   reproductionTest?: string;
   reproductionFailureOutput?: string;

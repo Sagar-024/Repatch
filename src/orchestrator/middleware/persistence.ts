@@ -12,9 +12,6 @@ export class PersistenceMiddleware {
     this.checkpointFile = path.join(this.checkpointDir, "state.json");
   }
 
-  /**
-   * Saves the current agent state to disk, masking all secrets.
-   */
   async save(state: AgentState): Promise<void> {
     try {
       if (!fs.existsSync(this.checkpointDir)) {
@@ -33,7 +30,7 @@ export class PersistenceMiddleware {
       // console.log(`   💾 State checkpointed to .repatch/state.json`);
     } catch (error) {
       console.warn(`   ⚠️ Persistence Warning: Could not save state. Disk might be full. Error: ${error}`);
-      // D13 - Fallback to memory-only is implicit as the state object remains in memory
+      // Fallback to memory-only — state object stays in memory anyway
     }
   }
 

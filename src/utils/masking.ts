@@ -1,8 +1,3 @@
-/**
- * Secret Masking Utility
- * Redacts sensitive tokens and keys from strings and objects.
- */
-
 const SECRET_PATTERNS = [
   /ghp_[a-zA-Z0-9]{36}/g,           // GitHub Personal Access Token
   /github_pat_[a-zA-Z0-9_]{82}/g,   // GitHub Fine-grained PAT

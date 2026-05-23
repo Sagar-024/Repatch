@@ -54,7 +54,7 @@ export async function getBuildPlan(repoPath: string): Promise<NixpacksPlan> {
 }
 
 function detectFallback(repoPath: string): NixpacksPlan {
-  // Check for package.json
+  // node
   const packageJsonPath = path.join(repoPath, "package.json");
   if (fs.existsSync(packageJsonPath)) {
     return {
@@ -66,7 +66,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for requirements.txt
+  // python
   const reqPath = path.join(repoPath, "requirements.txt");
   if (fs.existsSync(reqPath)) {
     return {
@@ -78,7 +78,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for go.mod
+  // go
   const goModPath = path.join(repoPath, "go.mod");
   if (fs.existsSync(goModPath)) {
     return {
@@ -90,7 +90,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for Cargo.toml (Rust)
+  // rust
   const cargoPath = path.join(repoPath, "Cargo.toml");
   if (fs.existsSync(cargoPath)) {
     return {
@@ -102,7 +102,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for pom.xml (Java Maven)
+  // java (maven)
   const pomPath = path.join(repoPath, "pom.xml");
   if (fs.existsSync(pomPath)) {
     return {
@@ -114,7 +114,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for build.gradle (Java Gradle)
+  // java (gradle)
   const gradlePath = path.join(repoPath, "build.gradle");
   if (fs.existsSync(gradlePath)) {
     return {
@@ -126,7 +126,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for Gemfile (Ruby)
+  // ruby
   const gemfilePath = path.join(repoPath, "Gemfile");
   if (fs.existsSync(gemfilePath)) {
     return {
@@ -138,7 +138,7 @@ function detectFallback(repoPath: string): NixpacksPlan {
     };
   }
 
-  // Check for composer.json (PHP)
+  // php
   const composerPath = path.join(repoPath, "composer.json");
   if (fs.existsSync(composerPath)) {
     return {
